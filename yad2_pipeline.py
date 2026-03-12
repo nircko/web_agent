@@ -20,6 +20,8 @@ from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from playwright.sync_api import sync_playwright, Page, Browser
 
+from yad2_url_builder import load_mappings, build_yad2_url_from_json
+
 
 BASE_SEARCH_URL = "https://www.yad2.co.il/realestate/forsale/center-and-sharon"
 
@@ -116,6 +118,8 @@ class RunSummary:
     total_unique_listings_found: int = 0
     total_listings_opened: int = 0
     total_listings_filtered_by_date: int = 0
+    total_listings_filtered_by_floor: int = 0
+    total_listings_filtered_by_city: int = 0
     total_exported_rows: int = 0
     total_partial_rows: int = 0
     total_failed_rows: int = 0
@@ -248,6 +252,8 @@ class Yad2Scraper:
         max_pages: int = 4,
         captcha_avoidance_min: float = 0.0,
         headless: bool = True,
+        cities_to_skip: Optional[List[str]] = None,
+        areas: Optional[List[str]] = None,
     ):
         self.output_dir = output_dir
         self.images_dir = output_dir / "images"
@@ -261,12 +267,37 @@ class Yad2Scraper:
         self.session = requests.Session()
 
         # Configuration knobs
-        # - max_pages: how many search result pages to visit (default 4)
+        # - max_pages: how many search result pages to visit per area (default 4)
         # - captcha_avoidance_min: optional delay (in minutes) between pages to reduce captcha risk
         # - headless: run browser without UI when True (default) or with visible window when False
+        # - cities_to_skip: list of city names to hard-skip after parsing (e.g. cities outside the desired zone)
+        # - areas: list of human-readable Yad2 "area" names to iterate over, as defined in assets/yad2_area_IDs.json
         self.max_pages = max(1, int(max_pages))
         self.captcha_avoidance_min = max(0.0, float(captcha_avoidance_min))
         self.headless = bool(headless)
+        normalized_cities: Set[str] = set()
+        if cities_to_skip:
+            for c in cities_to_skip:
+                if c is None:
+                    continue
+                name = str(c).strip()
+                if name:
+                    normalized_cities.add(name)
+        self.cities_to_skip: Set[str] = normalized_cities
+
+        # Areas to iterate over for search pages. If empty, we search only by big_area
+        # (i.e., the original behavior without per-area filtering).
+        self.areas: List[str] = [a for a in (areas or []) if str(a).strip()]
+
+        # Load canonical Yad2 mappings for big_area / area / city IDs once per scraper.
+        mappings_path = Path("assets") / "yad2_area_IDs.json"
+        self.yad2_mappings = load_mappings(mappings_path)
+
+        # Derive the slug for the configured big area once (used to filter out
+        # unrelated listing links like recommendations from other regions).
+        self.big_area_name: str = "Center and Sharon"
+        big_area_map = self.yad2_mappings.get("big_area", {}) or {}
+        self.big_area_slug: str = big_area_map.get(self.big_area_name, "center-and-sharon")
 
         self._setup_dirs()
         self._setup_logging()
@@ -291,13 +322,34 @@ class Yad2Scraper:
             ],
         )
 
-    def build_filtered_url(self, page_number: int) -> str:
-        return (
-            f"{BASE_SEARCH_URL}"
-            f"?minPrice=1600000&maxPrice=3600000"
-            f"&maxFloor=4&minSquareMeterBuild=90"
-            f"&propertyCondition=5%2C3"
-            f"&page={page_number}"
+    def build_filtered_url(self, page_number: int, area_name: Optional[str] = None) -> str:
+        """
+        Build a Yad2 search URL for the configured big area and a specific "area"
+        (sub-region) using the canonical ID mappings.
+
+        - `page_number`: which search page to fetch.
+        - `area_name`: a human-readable area label matching the 'area' keys in
+          assets/yad2_area_IDs.json (e.g. "Rishon LeZion Area"). If None, the
+          search is performed only by big area (no multiArea filter), which
+          reproduces the original behavior.
+        """
+        areas_param: Optional[List[str]] = None
+        if area_name:
+            areas_param = [area_name]
+
+        return build_yad2_url_from_json(
+            self.yad2_mappings,
+            big_area="Center and Sharon",
+            listing_type="forsale",
+            areas=areas_param,
+            cities=None,
+            neighborhoods=None,
+            min_price=1600000,
+            max_price=3600000,
+            max_floor=4,
+            min_square_meter_build=90,
+            property_condition=[5, 3],
+            page=page_number,
         )
 
     def scrape(self) -> None:
@@ -305,18 +357,25 @@ class Yad2Scraper:
             # Use the configured headless flag to control whether the browser shows a UI.
             browser = p.chromium.launch(headless=self.headless)
             try:
-                for page_number in range(1, self.max_pages + 1):
-                    search_url = self.build_filtered_url(page_number)
-                    self._process_search_page(browser, search_url, page_number)
-                    # Optional delay between pages to reduce captcha risk
-                    if self.captcha_avoidance_min > 0 and page_number < self.max_pages:
-                        delay_sec = self.captcha_avoidance_min * 60.0
-                        logging.info(
-                            f"Sleeping for {self.captcha_avoidance_min} minute(s) "
-                            f"({int(delay_sec)} seconds) before next search page to avoid captcha."
-                        )
-                        time.sleep(delay_sec)
-                logging.info("Finished processing all search pages.")
+                target_areas: List[Optional[str]] = self.areas or [None]
+
+                for area_name in target_areas:
+                    area_label = area_name if area_name is not None else "big_area_only"
+                    logging.info(f"Starting search for area: {area_label}")
+
+                    for page_number in range(1, self.max_pages + 1):
+                        search_url = self.build_filtered_url(page_number, area_name=area_name)
+                        self._process_search_page(browser, search_url, page_number)
+                        # Optional delay between pages to reduce captcha risk
+                        if self.captcha_avoidance_min > 0 and page_number < self.max_pages:
+                            delay_sec = self.captcha_avoidance_min * 60.0
+                            logging.info(
+                                f"Sleeping for {self.captcha_avoidance_min} minute(s) "
+                                f"({int(delay_sec)} seconds) before next search page to avoid captcha."
+                            )
+                            time.sleep(delay_sec)
+
+                logging.info("Finished processing all search pages for all areas.")
             finally:
                 browser.close()
 
@@ -353,10 +412,16 @@ class Yad2Scraper:
         logging.info(f"Found {len(cards)} potential listing cards on page {page_number}")
 
         listing_links: List[Tuple[str, str]] = []  # (id, url)
+        region_fragment = f"/realestate/item/{self.big_area_slug}/"
         for card in cards:
             href = card.get_attribute("href") or ""
             if not href.startswith("http"):
                 href = "https://www.yad2.co.il" + href
+            # Filter out links that do not belong to the configured region, e.g.
+            # recommendations like /realestate/item/south/... that appear on the page
+            # but are outside the Center & Sharon scope.
+            if region_fragment not in href:
+                continue
             listing_id = self._extract_listing_id_from_url(href)
             if not listing_id:
                 # Fallback: hash the URL.
@@ -711,10 +776,15 @@ class Yad2Scraper:
         if m:
             record.rooms = float(m.group(1))
 
-        # Floor
-        m = re.search(r"קומה\s*(\d+)", text)
+        # Floor (current and total, if available, e.g. "קומה 3 מתוך 7")
+        m = re.search(r"קומה\s*(\d+)(?:\s*מתוך\s*(\d+))?", text)
         if m:
             record.floor_current = int(m.group(1))
+            if m.group(2):
+                try:
+                    record.floor_total = int(m.group(2))
+                except ValueError:
+                    record.floor_total = None
 
         # Built sqm
         m = re.search(r"(\d+)\s*מ\"ר\s*בנוי", text)
@@ -1012,6 +1082,27 @@ class Yad2Scraper:
             self.run_summary.total_rows_with_missing_critical_fields += 1
 
     def _append_record_to_csv(self, record: ListingRecord) -> None:
+        # Pretty-print a summary of the listing that successfully passed all
+        # filters and is about to be persisted to the main CSV.
+        logging.info(
+            "\n"
+            "==================== EXPORTED LISTING ====================\n"
+            f"ID:                {record.yad2_listing_id}\n"
+            f"URL:               {record.original_listing_url}\n"
+            f"City:              {record.city!r}\n"
+            f"Street:            {record.street_name!r}\n"
+            f"Rooms:             {record.rooms}\n"
+            f"Built sqm:         {record.built_sqm}\n"
+            f"Floor (current):   {record.floor_current}\n"
+            f"Floor (total):     {record.floor_total}\n"
+            f"Price (ILS):       {record.price_ils}\n"
+            f"Publication date:  {record.publication_date_iso or record.publication_date_raw}\n"
+            f"Address conf.:     {record.address_confidence}\n"
+            f"Geocode status:    {record.geocode_status}\n"
+            f"Missing reason:    {record.missing_reason_code}\n"
+            "==========================================================="
+        )
+
         df = pd.DataFrame([record.dict()])
         exists = self.output_csv.exists()
         df.to_csv(
@@ -1064,12 +1155,7 @@ class Yad2Scraper:
                             f"FAILED 3-month filter (cutoff {cutoff_date}), skipping listing."
                         )
                         self.run_summary.total_listings_filtered_by_date += 1
-                        # Save light debug artifacts so we can inspect why it was skipped
-                        self._save_debug_artifacts(
-                            page,
-                            listing_id,
-                            f"filtered_out_by_publication_date {pub_date} < {cutoff_date}",
-                        )
+                        # Do not download images or persist debug artifacts for filtered-out-by-date listings.
                         return
                     else:
                         logging.info(
@@ -1082,7 +1168,27 @@ class Yad2Scraper:
                         f"for listing {listing_id}: {e}"
                     )
 
-            # Download images (best-effort, not critical)
+            # Enforce city skip filter: drop listings whose parsed city is explicitly not relevant.
+            if record.city and record.city in self.cities_to_skip:
+                logging.info(
+                    f"Listing {listing_id} city '{record.city}' is in cities_to_skip, "
+                    "skipping listing without downloading images or debug artifacts."
+                )
+                self.run_summary.total_listings_filtered_by_city += 1
+                return
+
+            # Enforce maximum total floors filter: if the building has more than 7
+            # floors in total, skip this listing (user preference).
+            if record.floor_total is not None and record.floor_total > 7:
+                logging.info(
+                    f"Listing {listing_id} has floor_total={record.floor_total} (> 7), "
+                    "skipping listing without downloading images or debug artifacts."
+                )
+                self.run_summary.total_listings_filtered_by_floor += 1
+                return
+
+            # Download images (best-effort, not critical).
+            # Only reached for listings that passed all filters (date, city, etc.).
             self._download_images(listing_id, page, record)
 
             # Validate critical fields and save debug evidence if needed
@@ -1115,7 +1221,7 @@ def main() -> None:
         "--max-pages",
         type=int,
         default=4,
-        help="Number of search result pages to visit (default: 4)",
+        help="Number of search result pages to visit per area (default: 4)",
     )
     parser.add_argument(
         "--captcha-avoidance-min",
@@ -1125,20 +1231,40 @@ def main() -> None:
     )
     parser.add_argument(
         "--headless",
-        dest="headless",
-        action="store_true",
-        help="Run the browser without a visible UI (default behavior).",
+        type=int,
+        choices=[0, 1],
+        default=1,
+        help=(
+            "Control browser UI visibility: 1 (default) runs Chromium in headless mode "
+            "(no visible window), 0 runs with a visible browser window (useful for debugging "
+            "and manually solving captchas)."
+        ),
     )
     parser.add_argument(
-        "--no-headless",
-        dest="headless",
-        action="store_false",
-        help="Run the browser with a visible window (useful for debugging/captcha solving).",
+        "--areas",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated list of Yad2 'area' names (as in assets/yad2_area_IDs.json, "
+            "under the 'area' key) to iterate over. Example: "
+            "--areas 'Rishon LeZion Area, Netanya Area'. If omitted, the scraper will "
+            "search only by big_area (Center and Sharon) without a multiArea filter."
+        ),
     )
-    parser.set_defaults(headless=True)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
+
+    # Interpret headless flag: 1 => True (no UI, default), 0 => False (visible window).
+    headless_bool = bool(args.headless)
+
+    # Parse areas from comma-separated CLI argument into a list of area names.
+    areas_list: List[str] = []
+    if args.areas:
+        for part in args.areas.split(","):
+            name = part.strip()
+            if name:
+                areas_list.append(name)
 
     geocoding_email = os.getenv("GEOCODING_EMAIL", "example@example.com")
     geocoder = Geocoder(email=geocoding_email)
@@ -1150,13 +1276,35 @@ def main() -> None:
     else:
         logging.warning("ORS_API_KEY not set, routing will be skipped.")
 
+    # Load cities_to_skip from dedicated config file, if present.
+    # Expected path: config/yad2_config.json with structure:
+    # {
+    #   "cities_to_skip": ["חיפה", "ירושלים"]
+    # }
+    config_path = Path("config") / "yad2_config.json"
+    cities_to_skip_list: List[str] = []
+    if config_path.exists():
+        try:
+            raw_config = json.loads(config_path.read_text(encoding="utf-8"))
+            raw_cities = raw_config.get("cities_to_skip", []) or []
+            for c in raw_cities:
+                if c is None:
+                    continue
+                name = str(c).strip()
+                if name:
+                    cities_to_skip_list.append(name)
+        except Exception as e:
+            logging.warning(f"Failed to load cities_to_skip from {config_path}: {e}")
+
     scraper = Yad2Scraper(
         output_dir=output_dir,
         geocoder=geocoder,
         route_calculator=route_calculator,
         max_pages=args.max_pages,
         captcha_avoidance_min=args.captcha_avoidance_min,
-        headless=args.headless,
+        headless=headless_bool,
+        cities_to_skip=cities_to_skip_list,
+        areas=areas_list,
     )
     scraper.scrape()
 
