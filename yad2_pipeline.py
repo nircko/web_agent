@@ -247,6 +247,7 @@ class Yad2Scraper:
         route_calculator: Optional[RouteCalculator],
         max_pages: int = 4,
         captcha_avoidance_min: float = 0.0,
+        headless: bool = True,
     ):
         self.output_dir = output_dir
         self.images_dir = output_dir / "images"
@@ -262,8 +263,10 @@ class Yad2Scraper:
         # Configuration knobs
         # - max_pages: how many search result pages to visit (default 4)
         # - captcha_avoidance_min: optional delay (in minutes) between pages to reduce captcha risk
+        # - headless: run browser without UI when True (default) or with visible window when False
         self.max_pages = max(1, int(max_pages))
         self.captcha_avoidance_min = max(0.0, float(captcha_avoidance_min))
+        self.headless = bool(headless)
 
         self._setup_dirs()
         self._setup_logging()
@@ -298,9 +301,9 @@ class Yad2Scraper:
         )
 
     def scrape(self) -> None:
-        headless = os.getenv("HEADLESS", "true").lower() == "true"
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=headless)
+            # Use the configured headless flag to control whether the browser shows a UI.
+            browser = p.chromium.launch(headless=self.headless)
             try:
                 for page_number in range(1, self.max_pages + 1):
                     search_url = self.build_filtered_url(page_number)
@@ -330,7 +333,18 @@ class Yad2Scraper:
     def _process_search_page(self, browser: Browser, url: str, page_number: int) -> None:
         logging.info(f"Processing search page {page_number}: {url}")
         page = browser.new_page()
-        page.goto(url, wait_until="networkidle", timeout=60000)
+        try:
+            # Yad2 pages often keep background network activity (ads, analytics, captcha),
+            # so waiting for "networkidle" tends to timeout. Instead, wait for DOM content
+            # and then give it a short fixed delay to stabilize.
+            page.goto(url, wait_until="domcontentloaded", timeout=120000)
+            page.wait_for_timeout(5000)  # 5s grace period for listings / widgets to render
+        except Exception as e:
+            logging.error(f"Timeout or error loading search page {page_number}: {e}")
+            self._save_debug_artifacts(page, f"search_page_{page_number}", f"search_page_load_error: {e}")
+            page.close()
+            return
+
         self.run_summary.total_search_pages_visited += 1
 
         # Attempt to select listing cards heuristically.
@@ -1109,6 +1123,19 @@ def main() -> None:
         default=0.0,
         help="Minutes to sleep between pages to reduce CAPTCHA risk (0 = no delay, default: 0)",
     )
+    parser.add_argument(
+        "--headless",
+        dest="headless",
+        action="store_true",
+        help="Run the browser without a visible UI (default behavior).",
+    )
+    parser.add_argument(
+        "--no-headless",
+        dest="headless",
+        action="store_false",
+        help="Run the browser with a visible window (useful for debugging/captcha solving).",
+    )
+    parser.set_defaults(headless=True)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -1129,6 +1156,7 @@ def main() -> None:
         route_calculator=route_calculator,
         max_pages=args.max_pages,
         captcha_avoidance_min=args.captcha_avoidance_min,
+        headless=args.headless,
     )
     scraper.scrape()
 
