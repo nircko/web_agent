@@ -1,0 +1,10 @@
+playwright
+requests
+pandas
+pydantic
+tenacity
+python-dotenv
+openrouteservice
+beautifulsoup4
+lxml
+rich
