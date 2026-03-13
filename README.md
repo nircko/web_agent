@@ -18,41 +18,44 @@ This project implements an end‑to‑end data collection pipeline that:
   - `output/debug/`
   - `output/logs/`
 
-### 1. Create and activate virtual environment
+### 1. Easy installation (recommended)
 
-Windows:
+The simplest way to install everything is to use the provided setup scripts.
+They will:
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
+- Install Python 3.12 (when possible).
+- Create a `.venv` virtual environment.
+- Install all required Python packages.
+- Install Playwright browsers.
+- Create a `.env` file with your API keys.
 
-macOS / Linux:
+**Windows:**
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+1. Open PowerShell in the project root (`web_agent`).
+2. Run:
 
-### 2. Upgrade pip
+   ```powershell
+   .\setup_yad2_scraper_windows.ps1
+   ```
 
-```bash
-python -m pip install --upgrade pip
-```
+**macOS / Linux:**
 
-### 3. Install dependencies
+1. Open Terminal in the project root (`web_agent`).
+2. Make the script executable once:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   chmod +x setup_yad2_scraper_macos.sh
+   ```
 
-### 4. Install Playwright browsers
+3. Run:
 
-```bash
-python -m playwright install
-```
+   ```bash
+   ./setup_yad2_scraper_macos.sh
+   ```
 
-### 5. Environment variables
+These scripts are **idempotent** – you can re-run them if something goes wrong.
+
+### 2. Environment variables
 
 Create a `.env` file in the project root:
 
@@ -64,36 +67,39 @@ GEOCODING_EMAIL=your_email_for_nominatim_header
 - **`ORS_API_KEY`**: Free key from OpenRouteService.
 - **`GEOCODING_EMAIL`**: Used in Nominatim headers as a contact.
 
-### 6. How to run
+### 3. How to run
 
-After you have run the setup script once (`setup_yad2_scraper_macos.sh` on macOS,
-or `setup_yad2_scraper_windows.ps1` on Windows), the typical run flow is:
+After the setup script has completed successfully, you only need **one command per OS**.
 
-- **macOS (example using your preferred output folder and areas)**:
+#### macOS / Linux (simple)
 
-  ```bash
-  cd /Users/nircko/GIT/web_agent
-  source .venv/bin/activate
-  python yad2_pipeline.py \
-    --output-dir "/Users/nircko/DATA/projects/yad2_results" \
-    --max-pages 2 \
-    --captcha-avoidance-min 0 \
-    --headless 0 \
-    --areas "Ramat HaSharon & Herzliya Area,Rishon LeZion Area, Netanya Area"
-  ```
+```bash
+cd /Users/nircko/GIT/web_agent
+chmod +x run_yad2_macos.sh   # first time only
+./run_yad2_macos.sh
+```
 
-- **Windows (PowerShell, analogous example)**:
+This script will:
 
-  ```powershell
-  cd C:\path\to\web_agent
-  .\.venv\Scripts\Activate.ps1
-  python yad2_pipeline.py `
-    --output-dir ".\output" `
-    --max-pages 2 `
-    --captcha-avoidance-min 0 `
-    --headless 1 `
-    --areas "Rishon LeZion Area, Netanya Area"
-  ```
+- Use the `.venv` Python created by `setup_yad2_scraper_macos.sh`.
+- Run the main pipeline with sensible defaults.
+- Write results to `./output`.
+
+#### Windows (PowerShell, simple)
+
+```powershell
+cd C:\path\to\web_agent
+.\run_yad2_windows.ps1
+```
+
+This script will:
+
+- Use the `.venv` Python created by `setup_yad2_scraper_windows.ps1`.
+- Run the main pipeline with sensible defaults.
+- Write results to `.\output`.
+
+If you prefer to run the Python command directly (advanced), see inside
+`run_yad2_macos.sh` or `run_yad2_windows.ps1` for the exact arguments.
 
 The script will:
 
