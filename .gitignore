@@ -1,0 +1,43 @@
+# Python / virtualenv
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / editor
+.vscode/
+.idea/
+.DS_Store
+
+# Local environment config
+.env
+
+# Playwright browsers cache
+.playwright/
+
+# Scraper outputs
+output/
+output_demo/
+logs/
+debug/
+*.log
+
+# Ready-for-Windows generated artifacts
+ready_for_windows/output/
+ready_for_windows/logs/
+ready_for_windows/debug/
+ready_for_windows/images/
+ready_for_windows/*.log
+ready_for_windows/yad2_scraper.exe
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+

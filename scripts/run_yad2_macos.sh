@@ -6,7 +6,7 @@ echo "=== Yad2 Scraper Runner (macOS / Linux) ==="
 
 if [ ! -x ".venv/bin/python" ]; then
   echo "Virtual environment not found or Python is not executable at .venv/bin/python."
-  echo "Please run ./setup_yad2_scraper_macos.sh first, then re-run this script."
+  echo "Please run ./scripts/setup_yad2_scraper_macos.sh first, then re-run this script."
   exit 1
 fi
 

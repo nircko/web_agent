@@ -77,19 +77,4 @@ cat "${ENV_FILE}"
 
 echo
 echo "=== Setup complete ==="
-echo
-echo "To run the scraper next time:"
-echo "  1) Open a terminal in this folder."
-echo "  2) Activate the virtual environment:"
-echo "       source .venv/bin/activate"
-echo "  3) Run, for example:"
-echo "       python yad2_pipeline.py \\"
-echo "         --output-dir ./output \\"
-echo "         --max-pages 2 \\"
-echo "         --captcha-avoidance-min 0 \\"
-echo "         --headless 1 \\"
-echo "         --areas \"Rishon LeZion Area, Netanya Area\""
-echo
-echo "If you run into issues (captcha, headless mode, Python errors, etc.),"
-echo "please see the TROUBLESHOOTING.md file in this folder."
 

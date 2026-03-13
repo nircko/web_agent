@@ -1,13 +1,5 @@
 <# 
- Yad2 Scraper Runner (Windows, PowerShell)
-
- This script assumes that:
-   - setup_yad2_scraper_windows.ps1 has been run successfully.
-   - The .venv virtual environment exists and contains all dependencies.
-
- Usage:
-   - Open PowerShell in the project root (web_agent) and run:
-       .\run_yad2_windows.ps1
+ Core runner script used by the Windows .bat launcher.
 #>
 
 param()
@@ -20,7 +12,7 @@ Write-Host "=== Yad2 Scraper Runner (Windows) ===" -ForegroundColor Cyan
 $venvPython = ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     Write-Host "Virtual environment not found at $venvPython." -ForegroundColor Red
-    Write-Host "Please run .\setup_yad2_scraper_windows.ps1 first, then re-run this script." -ForegroundColor Yellow
+    Write-Host "Please run setup_yad2_scraper_windows.bat first, then re-run this script." -ForegroundColor Yellow
     exit 1
 }
 

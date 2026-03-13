@@ -3,8 +3,8 @@ REM ============================================
 REM  Yad2 Scraper - Windows Setup Launcher
 REM ============================================
 
-REM Change to the folder containing this script
-cd /d "%~dp0"
+REM Change to the project root (folder containing this script)
+cd /d "%~dp0\.."
 
 echo ============================================
 echo  Running Yad2 setup (Windows)...
@@ -14,13 +14,13 @@ echo  configure Playwright and .env.
 echo ============================================
 echo.
 
-powershell -ExecutionPolicy Bypass -File ".\setup_yad2_scraper_windows.ps1"
+powershell -ExecutionPolicy Bypass -File ".\scripts\setup_yad2_scraper_windows.ps1"
 
 echo.
 echo ============================================
 echo  Setup finished. If you saw no errors above,
 echo  you can now run:
-echo    run_yad2_windows.bat
+echo    scripts\run_yad2_windows.bat
 echo ============================================
 echo.
 pause

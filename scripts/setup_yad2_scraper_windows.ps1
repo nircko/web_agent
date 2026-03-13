@@ -1,17 +1,7 @@
 <# 
  Yad2 Scraper Setup (Windows, PowerShell)
 
- This script is intended for non‑technical users. It will:
-   1. Check that Python 3 is installed.
-   2. Create a virtual environment in .venv.
-   3. Install all required Python packages.
-   4. Install Playwright browsers.
-   5. Create a .env file with your API keys.
-
- Usage:
-   - Right‑click this file and choose "Run with PowerShell"
-     OR open PowerShell in the project folder and run:
-       ./setup_yad2_scraper_windows.ps1
+ Core setup script used by the Windows .bat launcher.
 #>
 
 param()
@@ -106,27 +96,23 @@ $envFile = ".env"
 Write-Host ""
 Write-Host "Now we will configure API keys used for geocoding and routing." -ForegroundColor Cyan
 
-$orsKey = Read-Host "Enter your OpenRouteService API key (ORS_API_KEY), or leave empty to skip routing"
+$orsKey   = Read-Host "Enter your OpenRouteService API key (ORS_API_KEY), or leave empty to skip routing"
 $geoEmail = Read-Host "Enter your email for Nominatim (GEOCODING_EMAIL), used only in headers (recommended)"
+
+if ([string]::IsNullOrWhiteSpace($geoEmail)) {
+    $geoEmailToWrite = "example@example.com"
+} else {
+    $geoEmailToWrite = $geoEmail
+}
 
 @"
 ORS_API_KEY=$orsKey
-GEOCODING_EMAIL=$([string]::IsNullOrWhiteSpace($geoEmail) ? "example@example.com" : $geoEmail)
+GEOCODING_EMAIL=$geoEmailToWrite
 "@ | Out-File -FilePath $envFile -Encoding UTF8 -Force
 
 Write-Host ""
-Write-Host "Wrote configuration to $envFile:" -ForegroundColor Green
-Get-Content $envFile
+Write-Host ("Wrote configuration to {0}:" -f $envFile) -ForegroundColor Green
 
 Write-Host ""
 Write-Host "=== Setup complete ===" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "To run the scraper next time:" -ForegroundColor Yellow
-Write-Host "  1) Open PowerShell in this folder." -ForegroundColor Yellow
-Write-Host "  2) Activate the virtual environment:" -ForegroundColor Yellow
-Write-Host "       .\.venv\Scripts\Activate.ps1" -ForegroundColor Yellow
-Write-Host "  3) Run, for example:" -ForegroundColor Yellow
-Write-Host "       python yad2_pipeline.py \"-output-dir\" \"./output\" \"-max-pages\" 2 \"-captcha-avoidance-min\" 0 \"-headless\" 1 \"-areas\" \"Rishon LeZion Area, Netanya Area\"" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "If you run into issues (captcha, headless mode, Python errors, etc.), see TROUBLESHOOTING.md in this folder." -ForegroundColor Cyan
 

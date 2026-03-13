@@ -7,8 +7,8 @@ This guide collects common issues you may encounter when running the scraper and
 - **Symptom**: You see errors mentioning Playwright, missing browsers, or nothing seems to happen.
 - **Fix**:
   - Make sure you ran one of the setup scripts:
-    - macOS / Linux: `./setup_yad2_scraper_macos.sh`
-    - Windows: `.\setup_yad2_scraper_windows.ps1`
+    - macOS / Linux: `./scripts/setup_yad2_scraper_macos.sh`
+    - Windows: `scripts\setup_yad2_scraper_windows.bat` (double-click in Explorer, or run from PowerShell)
   - Or at minimum, install Playwright browsers:
     ```bash
     python -m playwright install
@@ -81,25 +81,27 @@ This guide collects common issues you may encounter when running the scraper and
 
 - **Symptom**: Import errors, missing packages, or wrong Python version.
 - **Fix**:
-  - Always activate the project virtual environment before running:
+  - Recommended:
+    - macOS / Linux:
+      ```bash
+      ./scripts/setup_yad2_scraper_macos.sh
+      ./scripts/run_yad2_macos.sh
+      ```
+    - Windows:
+      - Double-click `scripts\setup_yad2_scraper_windows.bat`
+      - Then double-click `scripts\run_yad2_windows.bat`
+  - Advanced (manual venv use):
     - macOS / Linux:
       ```bash
       source .venv/bin/activate
+      python yad2_pipeline.py ...
       ```
     - Windows (PowerShell):
       ```powershell
       .\.venv\Scripts\Activate.ps1
+      python yad2_pipeline.py ...
       ```
-  - If `.venv` is missing or broken, rerun the setup script:
-    - macOS / Linux:
-      ```bash
-      ./setup_yad2_scraper_macos.sh
-      ```
-    - Windows:
-      ```powershell
-      .\setup_yad2_scraper_windows.ps1
-      ```
-  - These scripts ensure **Python 3.12** is installed and used for the venv.
+  - The setup scripts ensure **Python 3.12** is installed and used for the venv.
 
 ### 7. No or partial data in `listings_full.csv`
 

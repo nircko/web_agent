@@ -31,11 +31,12 @@ They will:
 
 **Windows:**
 
-1. Open PowerShell in the project root (`web_agent`).
-2. Run:
+1. In File Explorer, open the `scripts\` folder inside `web_agent`.
+2. Double‑click `setup_yad2_scraper_windows.bat`  
+   **or** open PowerShell in the project root (`web_agent`) and run:
 
    ```powershell
-   .\setup_yad2_scraper_windows.ps1
+   .\scripts\setup_yad2_scraper_windows.bat
    ```
 
 **macOS / Linux:**
@@ -44,13 +45,13 @@ They will:
 2. Make the script executable once:
 
    ```bash
-   chmod +x setup_yad2_scraper_macos.sh
+   chmod +x scripts/setup_yad2_scraper_macos.sh
    ```
 
 3. Run:
 
    ```bash
-   ./setup_yad2_scraper_macos.sh
+   ./scripts/setup_yad2_scraper_macos.sh
    ```
 
 These scripts are **idempotent** – you can re-run them if something goes wrong.
@@ -75,8 +76,8 @@ After the setup script has completed successfully, you only need **one command p
 
 ```bash
 cd /Users/nircko/GIT/web_agent
-chmod +x run_yad2_macos.sh   # first time only
-./run_yad2_macos.sh
+chmod +x scripts/run_yad2_macos.sh   # first time only
+./scripts/run_yad2_macos.sh
 ```
 
 This script will:
@@ -85,14 +86,19 @@ This script will:
 - Run the main pipeline with sensible defaults.
 - Write results to `./output`.
 
-#### Windows (PowerShell, simple)
+#### Windows (PowerShell / double‑click, simple)
 
-```powershell
-cd C:\path\to\web_agent
-.\run_yad2_windows.ps1
-```
+You can:
 
-This script will:
+- Open the `scripts\` folder and double‑click `run_yad2_windows.bat`, **or**
+- Run from PowerShell:
+
+  ```powershell
+  cd C:\path\to\web_agent
+  .\scripts\run_yad2_windows.bat
+  ```
+
+The runner script will:
 
 - Use the `.venv` Python created by `setup_yad2_scraper_windows.ps1`.
 - Run the main pipeline with sensible defaults.
