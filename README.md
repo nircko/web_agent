@@ -66,16 +66,34 @@ GEOCODING_EMAIL=your_email_for_nominatim_header
 
 ### 6. How to run
 
-From the project root:
+After you have run the setup script once (`setup_yad2_scraper_macos.sh` on macOS,
+or `setup_yad2_scraper_windows.ps1` on Windows), the typical run flow is:
 
-```bash
-python yad2_pipeline.py \
-  --output-dir ./output \
-  --max-pages 4 \
-  --captcha-avoidance-min 0 \
-  --headless 1 \
-  --areas "Rishon LeZion Area, Netanya Area"
-```
+- **macOS (example using your preferred output folder and areas)**:
+
+  ```bash
+  cd /Users/nircko/GIT/web_agent
+  source .venv/bin/activate
+  python yad2_pipeline.py \
+    --output-dir "/Users/nircko/DATA/projects/yad2_results" \
+    --max-pages 2 \
+    --captcha-avoidance-min 0 \
+    --headless 0 \
+    --areas "Ramat HaSharon & Herzliya Area,Rishon LeZion Area, Netanya Area"
+  ```
+
+- **Windows (PowerShell, analogous example)**:
+
+  ```powershell
+  cd C:\path\to\web_agent
+  .\.venv\Scripts\Activate.ps1
+  python yad2_pipeline.py `
+    --output-dir ".\output" `
+    --max-pages 2 `
+    --captcha-avoidance-min 0 `
+    --headless 1 `
+    --areas "Rishon LeZion Area, Netanya Area"
+  ```
 
 The script will:
 
@@ -101,4 +119,24 @@ You can control browser visibility with:
 For common problems and fixes, see the dedicated troubleshooting guide:
 
 - `TROUBLESHOOTING.md`
+
+### 9. Building a standalone Windows EXE (advanced)
+
+If you want a single `.exe` file that includes Python and all dependencies for easier distribution on Windows:
+
+- **Prerequisites** (on a Windows machine):
+  - Run `setup_yad2_scraper_windows.ps1` at least once (this creates `.venv` with Python 3.12 and installs dependencies).
+- **Build steps**:
+  - In PowerShell, from the project root:
+    ```powershell
+    .\.venv\Scripts\Activate.ps1
+    .\build_windows_exe.ps1
+    ```
+  - This will create `dist\yad2_scraper.exe`.
+- **To run on another Windows machine**, copy:
+  - `dist\yad2_scraper.exe`
+  - The `assets` folder (for area/city ID mappings)
+  - Optionally `config` and `.env` if you use routing/geocoding.
+
+Playwright still needs its browser binaries available on the target machine. On first run, if you encounter Playwright errors, see `TROUBLESHOOTING.md` for instructions.
 

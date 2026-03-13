@@ -413,6 +413,34 @@ class Yad2Scraper:
 
         listing_links: List[Tuple[str, str]] = []  # (id, url)
         region_fragment = f"/realestate/item/{self.big_area_slug}/"
+
+        # Very lightweight pre-filter on publication recency at the card level to
+        # avoid opening obviously stale listings (older than ~3 months) when the
+        # search UI shows relative strings like "פורסם לפני X ימים".
+        def _estimate_days_ago(text: str) -> Optional[int]:
+            m_rel = re.search(
+                r"פורסם\s+לפני\s+(\d+)\s*(יום|ימים|שבוע|שבועות|חודש|חודשים|שנה|שנים)",
+                text,
+            )
+            if not m_rel:
+                return None
+            try:
+                count = int(m_rel.group(1))
+            except ValueError:
+                return None
+            unit = m_rel.group(2)
+            if unit.startswith("יום"):
+                return count
+            if unit.startswith("שבוע"):
+                return count * 7
+            if unit.startswith("חודש"):
+                return count * 30
+            if unit.startswith("שנה"):
+                return count * 365
+            return None
+
+        cutoff_days = 90
+
         for card in cards:
             href = card.get_attribute("href") or ""
             if not href.startswith("http"):
@@ -422,6 +450,21 @@ class Yad2Scraper:
             # but are outside the Center & Sharon scope.
             if region_fragment not in href:
                 continue
+
+            # Try to estimate recency from the card text (if available) and skip
+            # obviously old listings before opening them.
+            try:
+                card_text = card.inner_text() or ""
+            except Exception:
+                card_text = ""
+            days_ago = _estimate_days_ago(card_text)
+            if days_ago is not None and days_ago > cutoff_days:
+                logging.info(
+                    f"Skipping listing card on search page {page_number} as too old: "
+                    f"~{days_ago} days ago (> {cutoff_days})"
+                )
+                continue
+
             listing_id = self._extract_listing_id_from_url(href)
             if not listing_id:
                 # Fallback: hash the URL.
