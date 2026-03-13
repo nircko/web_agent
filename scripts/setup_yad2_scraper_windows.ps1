@@ -11,32 +11,57 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Yad2 Scraper Setup (Windows) ===" -ForegroundColor Cyan
 
-# 1. Prefer using the Python 3.12 version inside an existing .venv, if present.
+# 1. Prefer using the Python 3.12 version inside an existing .venv, if present,
+#    but only if that .venv is running Python >= 3.8. Older venvs are deleted
+#    and recreated with Python 3.12, otherwise playwright cannot be installed.
 $venvPython = ".venv\Scripts\python.exe"
+$reuseVenv = $false
+
 if (Test-Path $venvPython) {
-    Write-Host "Existing virtual environment detected. Using its Python version:" -ForegroundColor Yellow
-    & $venvPython --version
-} else {
+    $versionOutput = & $venvPython --version 2>$null
+    if ($versionOutput -match "Python\s+(\d+)\.(\d+)\.") {
+        $major = [int]$matches[1]
+        $minor = [int]$matches[2]
+
+        if (($major -gt 3) -or (($major -eq 3) -and ($minor -ge 8))) {
+            Write-Host "Existing virtual environment detected. Using its Python version:" -ForegroundColor Yellow
+            & $venvPython --version
+            $reuseVenv = $true
+        } else {
+            Write-Host "Existing virtual environment uses unsupported Python version ($versionOutput)." -ForegroundColor Yellow
+            Write-Host "Recreating .venv with Python 3.12 so playwright can be installed..." -ForegroundColor Yellow
+            Remove-Item -Recurse -Force ".venv"
+        }
+    } else {
+        Write-Host "Could not determine Python version of existing .venv. Recreating it with Python 3.12..." -ForegroundColor Yellow
+        Remove-Item -Recurse -Force ".venv"
+    }
+}
+
+if (-not $reuseVenv) {
     # Ensure Python 3.12 is installed (try to auto-install via winget when possible)
     # We are strict here: Playwright requires Python >= 3.8, and this project is
-    # tested with Python 3.12 specifically. Using an older interpreter (e.g. the
-    # default behind `py.exe`) will cause "No matching distribution found for playwright".
+    # tested with Python 3.12 specifically.
 
-    $pythonCmd = $null
+    # Decide which Python executable and args to use for (re)creating the venv
+    $pythonExe  = $null
+    $pythonArgs = @()
 
     # 1) Try a direct python3.12 first
     $python312 = Get-Command python3.12 -ErrorAction SilentlyContinue
     if ($python312) {
-        $pythonCmd = $python312.Source
+        $pythonExe  = $python312.Source
+        $pythonArgs = @()
     } else {
         # 2) Fallback to the Windows `py` launcher, but pin it to 3.12 explicitly
         $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
         if ($pyLauncher) {
-            $pythonCmd = "$($pyLauncher.Source) -3.12"
+            $pythonExe  = $pyLauncher.Source
+            $pythonArgs = @("-3.12")
         }
     }
 
-    if (-not $pythonCmd) {
+    if (-not $pythonExe) {
         Write-Host "Python 3.12 was not found on your PATH." -ForegroundColor Yellow
 
         $winget = Get-Command winget -ErrorAction SilentlyContinue
@@ -53,11 +78,13 @@ if (Test-Path $venvPython) {
             # Re-detect python 3.12 after installation
             $python312 = Get-Command python3.12 -ErrorAction SilentlyContinue
             if ($python312) {
-                $pythonCmd = $python312.Source
+                $pythonExe  = $python312.Source
+                $pythonArgs = @()
             } else {
                 $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
                 if ($pyLauncher) {
-                    $pythonCmd = "$($pyLauncher.Source) -3.12"
+                    $pythonExe  = $pyLauncher.Source
+                    $pythonArgs = @("-3.12")
                 }
             }
         } else {
@@ -67,18 +94,18 @@ if (Test-Path $venvPython) {
         }
     }
 
-    if (-not $pythonCmd) {
+    if (-not $pythonExe) {
         Write-Host "Python 3.12 is still not available after attempted installation." -ForegroundColor Red
         Write-Host "Please install Python 3.12 manually from https://www.python.org/downloads/ and re-run this script." -ForegroundColor Red
         exit 1
     }
 
-    Write-Host ("Using system Python 3.12 to create virtual environment: {0}" -f $pythonCmd) -ForegroundColor Green
+    Write-Host ("Using system Python 3.12 to create virtual environment: {0}" -f $pythonExe) -ForegroundColor Green
 
     # 2. Create virtual environment with Python 3.12
     if (-not (Test-Path ".venv")) {
         Write-Host "Creating virtual environment in .venv ..." -ForegroundColor Yellow
-        & $pythonCmd -m venv .venv
+        & $pythonExe @pythonArgs -m venv .venv
     } else {
         Write-Host "Virtual environment .venv already exists, reusing it." -ForegroundColor Yellow
     }
