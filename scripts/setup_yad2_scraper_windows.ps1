@@ -18,12 +18,25 @@ if (Test-Path $venvPython) {
     & $venvPython --version
 } else {
     # Ensure Python 3.12 is installed (try to auto-install via winget when possible)
-    $python = Get-Command python3.12 -ErrorAction SilentlyContinue
-    if (-not $python) {
-        $python = Get-Command py -ErrorAction SilentlyContinue
+    # We are strict here: Playwright requires Python >= 3.8, and this project is
+    # tested with Python 3.12 specifically. Using an older interpreter (e.g. the
+    # default behind `py.exe`) will cause "No matching distribution found for playwright".
+
+    $pythonCmd = $null
+
+    # 1) Try a direct python3.12 first
+    $python312 = Get-Command python3.12 -ErrorAction SilentlyContinue
+    if ($python312) {
+        $pythonCmd = $python312.Source
+    } else {
+        # 2) Fallback to the Windows `py` launcher, but pin it to 3.12 explicitly
+        $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+        if ($pyLauncher) {
+            $pythonCmd = "$($pyLauncher.Source) -3.12"
+        }
     }
 
-    if (-not $python) {
+    if (-not $pythonCmd) {
         Write-Host "Python 3.12 was not found on your PATH." -ForegroundColor Yellow
 
         $winget = Get-Command winget -ErrorAction SilentlyContinue
@@ -38,9 +51,14 @@ if (Test-Path $venvPython) {
             }
 
             # Re-detect python 3.12 after installation
-            $python = Get-Command python3.12 -ErrorAction SilentlyContinue
-            if (-not $python) {
-                $python = Get-Command py -ErrorAction SilentlyContinue
+            $python312 = Get-Command python3.12 -ErrorAction SilentlyContinue
+            if ($python312) {
+                $pythonCmd = $python312.Source
+            } else {
+                $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+                if ($pyLauncher) {
+                    $pythonCmd = "$($pyLauncher.Source) -3.12"
+                }
             }
         } else {
             Write-Host "winget is not available on this system." -ForegroundColor Yellow
@@ -49,18 +67,18 @@ if (Test-Path $venvPython) {
         }
     }
 
-    if (-not $python) {
+    if (-not $pythonCmd) {
         Write-Host "Python 3.12 is still not available after attempted installation." -ForegroundColor Red
         Write-Host "Please install Python 3.12 manually from https://www.python.org/downloads/ and re-run this script." -ForegroundColor Red
         exit 1
     }
 
-    Write-Host ("Using system Python 3.12 to create virtual environment: {0}" -f $python.Source) -ForegroundColor Green
+    Write-Host ("Using system Python 3.12 to create virtual environment: {0}" -f $pythonCmd) -ForegroundColor Green
 
     # 2. Create virtual environment with Python 3.12
     if (-not (Test-Path ".venv")) {
         Write-Host "Creating virtual environment in .venv ..." -ForegroundColor Yellow
-        & $python.Source -m venv .venv
+        & $pythonCmd -m venv .venv
     } else {
         Write-Host "Virtual environment .venv already exists, reusing it." -ForegroundColor Yellow
     }
