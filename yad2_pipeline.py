@@ -320,6 +320,7 @@ class Yad2Scraper:
                 logging.FileHandler(log_file, encoding="utf-8"),
                 logging.StreamHandler(sys.stdout),
             ],
+            force=True,
         )
 
     def build_filtered_url(self, page_number: int, area_name: Optional[str] = None) -> str:
@@ -1146,7 +1147,7 @@ class Yad2Scraper:
             "==========================================================="
         )
 
-        df = pd.DataFrame([record.dict()])
+        df = pd.DataFrame([record.model_dump()])
         exists = self.output_csv.exists()
         df.to_csv(
             self.output_csv,
