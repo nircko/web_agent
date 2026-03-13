@@ -390,6 +390,27 @@ class Yad2Scraper:
             return m.group(1)
         return None
 
+    def _wait_for_captcha_solved(self, page: Page, context: str) -> None:
+        """If the page shows ShieldSquare/captcha and we're not headless, wait for user to solve it."""
+        while True:
+            try:
+                title = page.title() or ""
+            except Exception:
+                title = ""
+            if "ShieldSquare" not in title and "Captcha" not in title:
+                break
+            if self.headless:
+                logging.warning(
+                    f"Captcha/ShieldSquare detected on {context} but running headless; "
+                    "cannot wait for manual solve. Consider running with --headless 0."
+                )
+                break
+            logging.info(f"Captcha/ShieldSquare detected on {context}.")
+            logging.info("Solve the captcha in the browser window, then press Enter here to continue.")
+            input("Press Enter when the real page is visible to continue... ")
+            page.wait_for_timeout(2000)  # give the page a moment to update after solve
+        return
+
     def _process_search_page(self, browser: Browser, url: str, page_number: int) -> None:
         logging.info(f"Processing search page {page_number}: {url}")
         page = browser.new_page()
@@ -404,6 +425,8 @@ class Yad2Scraper:
             self._save_debug_artifacts(page, f"search_page_{page_number}", f"search_page_load_error: {e}")
             page.close()
             return
+
+        self._wait_for_captcha_solved(page, f"search page {page_number}")
 
         self.run_summary.total_search_pages_visited += 1
 
@@ -1179,7 +1202,11 @@ class Yad2Scraper:
         page = browser.new_page()
         try:
             self.run_summary.total_listings_opened += 1
-            page.goto(listing_url, wait_until="networkidle", timeout=60000)
+            # Use domcontentloaded so captcha pages don't hang on networkidle; we then wait for user to solve captcha if needed
+            page.goto(listing_url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(3000)  # brief stabilization for listing content
+            self._wait_for_captcha_solved(page, f"listing {listing_id}")
+            page.wait_for_timeout(2000)  # allow page to settle after captcha solve
             record = self._extract_from_listing_page(
                 page,
                 listing_id=listing_id,
