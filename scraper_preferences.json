@@ -1,0 +1,14 @@
+{
+  "default_region": "Center and Sharon",
+  "listing_type": "forsale",
+  "areas": [],
+  "cities": [],
+  "price_min": 1600000,
+  "price_max": 3600000,
+  "max_floor": 4,
+  "min_square_meters": 90,
+  "property_condition": [5, 3],
+  "publication_max_months": 3,
+  "max_building_floors": 7,
+  "exclude_cities": []
+}
