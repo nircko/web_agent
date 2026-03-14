@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sys
+import warnings
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
@@ -14,11 +15,19 @@ from typing import Any, Dict, List, Optional, Tuple, Set, Union
 import openrouteservice
 import pandas as pd
 import requests
+from requests import RequestsDependencyWarning
+
+# Suppress urllib3/chardet version mismatch warning (common on Windows)
+warnings.filterwarnings("ignore", category=RequestsDependencyWarning)
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from playwright.sync_api import sync_playwright, Page, Browser
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich import box
 
 from yad2_url_builder import (
     load_mappings,
@@ -392,13 +401,6 @@ class Yad2Scraper:
             cities=cities_for_grouping if cities_for_grouping else None,
             default_district=default_district,
         )
-        if len(self.search_groups) > 1:
-            districts = [g[0] for g in self.search_groups]
-            logging.info(
-                "Areas/cities span multiple districts; splitting search and running each district separately: %s",
-                districts,
-            )
-
         self.listing_type: str = str(prefs.get("listing_type") or "forsale").strip()
         self.url_filters: Dict[str, Any] = dict(url_filters)
 
@@ -465,7 +467,84 @@ class Yad2Scraper:
             url_filters=self.url_filters,
         )
 
+    def _print_run_plan(self) -> None:
+        """Pretty-print input filters and search procedure (e.g. split by district) with colors."""
+        prefs = self._filter_preferences
+        url_f = self.url_filters
+        areas_in = prefs.get("areas") or []
+        cities_in = prefs.get("cities") or []
+        console = Console()
+        log_lines: List[str] = []
+
+        # Input filters table
+        filters_table = Table(show_header=False, box=box.ROUNDED, border_style="dim")
+        filters_table.add_column(style="cyan", width=42)
+        filters_table.add_column(style="white")
+        filters_table.add_row("Default region (when no areas/cities)", str(prefs.get("district", "—")))
+        filters_table.add_row("Areas", ", ".join(areas_in) if areas_in else "(none)")
+        filters_table.add_row("Cities", ", ".join(cities_in) if cities_in else "(none)")
+        filters_table.add_row(
+            "URL filters",
+            f"price {url_f.get('minPrice', '—')}–{url_f.get('maxPrice', '—')}, max_floor {url_f.get('maxFloor', '—')}, min_sqm {url_f.get('minSquareMeterBuild', '—')}",
+        )
+        filters_table.add_row(
+            "Post-filters",
+            f"publication ≤ {self.publication_cutoff_days // 30} months, max_floor_total {self.max_floor_total}, exclude_cities {list(self.cities_to_skip) or '[]'}",
+        )
+        filters_table.add_row("Run", f"max_pages={self.max_pages}, headless={self.headless}, output={self.output_dir}")
+
+        console.print(Panel(filters_table, title="[bold cyan] INPUT FILTERS [/]", border_style="cyan"))
+        log_lines.append("INPUT FILTERS")
+        log_lines.append(f"  Default region: {prefs.get('district', '—')}")
+        log_lines.append(f"  Areas: {', '.join(areas_in) if areas_in else '(none)'}")
+        log_lines.append(f"  Cities: {', '.join(cities_in) if cities_in else '(none)'}")
+        log_lines.append(f"  Run: max_pages={self.max_pages}, headless={self.headless}, output={self.output_dir}")
+
+        # Search plan
+        n = len(self.search_groups)
+        if n > 1:
+            plan_table = Table(show_header=True, box=box.ROUNDED, border_style="dim")
+            plan_table.add_column("Group", style="yellow", width=8)
+            plan_table.add_column("District", style="green")
+            plan_table.add_column("Areas", style="white")
+            plan_table.add_column("Cities", style="white")
+            for i, (district, group_areas, group_cities) in enumerate(self.search_groups, 1):
+                plan_table.add_row(
+                    str(i),
+                    district,
+                    ", ".join(group_areas) if group_areas else "(whole district)",
+                    ", ".join(group_cities) if group_cities else "(all in district)",
+                )
+            console.print(Panel(plan_table, title="[bold yellow] SEARCH PLAN (split by district) [/]", border_style="yellow"))
+            console.print(f"  [dim]Your areas/cities span {n} districts → {n} separate searches so each URL is valid for Yad2.[/]")
+            log_lines.append("SEARCH PLAN (split by district)")
+            log_lines.append(f"  Span {n} districts; {n} separate searches.")
+            for i, (district, group_areas, group_cities) in enumerate(self.search_groups, 1):
+                log_lines.append(f"  Group {i}: {district}")
+                log_lines.append(f"    Areas: {', '.join(group_areas) if group_areas else '(whole district)'}")
+                log_lines.append(f"    Cities: {', '.join(group_cities) if group_cities else '(all in district)'}")
+        else:
+            district, group_areas, group_cities = self.search_groups[0]
+            plan_table = Table(show_header=False, box=box.ROUNDED, border_style="dim")
+            plan_table.add_column(style="cyan", width=12)
+            plan_table.add_column(style="white")
+            plan_table.add_row("District", district)
+            plan_table.add_row("Areas", ", ".join(group_areas) if group_areas else "(whole district)")
+            plan_table.add_row("Cities", ", ".join(group_cities) if group_cities else "(all in district)")
+            console.print(Panel(plan_table, title="[bold green] SEARCH PLAN (single district) [/]", border_style="green"))
+            log_lines.append("SEARCH PLAN (single district)")
+            log_lines.append(f"  District: {district}")
+
+        # Append plain text to log file
+        log_file = self.logs_dir / "scraper.log"
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write("\n" + "\n".join(log_lines) + "\n")
+        except Exception:
+            pass
+
     def scrape(self) -> None:
+        self._print_run_plan()
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             try:
@@ -1466,7 +1545,7 @@ def main() -> None:
     if ors_api_key:
         route_calculator = RouteCalculator(api_key=ors_api_key)
     else:
-        logging.warning("ORS_API_KEY not set, routing will be skipped.")
+        logging.debug("ORS_API_KEY not set, routing will be skipped.")
 
     # Optional legacy config: cities_to_skip from config/yad2_config.json (merged with filter_preferences)
     config_path = Path("config") / "yad2_config.json"

@@ -70,37 +70,82 @@ GEOCODING_EMAIL=your_email_for_nominatim_header
 
 ### 3. How to run
 
-After the setup script has completed successfully, you only need **one command per OS**.
+After the setup script has completed successfully, use one of the options below. The pipeline prints a **colored summary** of your input filters and search plan (e.g. when the search is split by district) before starting.
 
-#### Option A: Runner scripts (simple)
+#### Option A: Runner scripts (one-click)
+
+**macOS:**
+
+1. Open **Terminal** and go to the project folder:
+   ```bash
+   cd /path/to/web_agent
+   ```
+2. First time only, make the script executable:
+   ```bash
+   chmod +x scripts/run_yad2_macos.sh
+   ```
+3. Run:
+   ```bash
+   ./scripts/run_yad2_macos.sh
+   ```
+
+**Windows:**
+
+1. Open **File Explorer** and go to the project folder (e.g. `C:\Users\YourName\Documents\web_agent`).
+2. Open the `scripts` folder and **double‑click** `run_yad2_windows.bat`  
+   **or** open **PowerShell** in the project folder and run:
+   ```powershell
+   .\scripts\run_yad2_windows.bat
+   ```
+3. The script will ask for output folder, number of pages, headless/visible browser, and areas. Press Enter to accept defaults.
+
+The runner uses the `.venv` from setup and writes results to `./output` (or the folder you chose).
+
+#### Option B: Run the pipeline directly (Windows / Mac)
+
+From the project root, activate the virtual environment, then run `yad2_pipeline.py`.
 
 **macOS / Linux:**
 
 ```bash
 cd /path/to/web_agent
-chmod +x scripts/run_yad2_macos.sh   # first time only
-./scripts/run_yad2_macos.sh
+source .venv/bin/activate
+python yad2_pipeline.py
 ```
 
-**Windows:** Open the `scripts\` folder and double‑click `run_yad2_windows.bat`, or from PowerShell:
+**Windows (PowerShell or Command Prompt):**
 
 ```powershell
 cd C:\path\to\web_agent
-.\scripts\run_yad2_windows.bat
+.\.venv\Scripts\Activate.ps1
+python yad2_pipeline.py
 ```
 
-The runner uses the `.venv` from setup and writes results to `./output`.
+Or in **Command Prompt**:
 
-#### Option B: Run `yad2_pipeline.py` directly
+```cmd
+cd C:\path\to\web_agent
+.venv\Scripts\activate.bat
+python yad2_pipeline.py
+```
 
-From the project root, with the virtual environment activated:
+Examples with options:
 
 ```bash
-# Activate venv (macOS/Linux)
-source .venv/bin/activate
+# Visible browser (e.g. to solve captchas)
+python yad2_pipeline.py --headless 0
 
-# Run with defaults (output to ./output, 4 pages, headless)
-python yad2_pipeline.py
+# Custom output folder and more pages
+python yad2_pipeline.py --output-dir my_output --max-pages 6
+
+# Specific areas (overrides scraper_preferences.json)
+python yad2_pipeline.py --areas "Netanya Area, Rishon LeZion Area"
+```
+
+On Windows, use double quotes for arguments with spaces:
+
+```powershell
+python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" --areas "Ramat Gan & Givatayim Area, Netanya Area"
 ```
 
 **All CLI options:**
@@ -112,22 +157,6 @@ python yad2_pipeline.py
 | `--captcha-avoidance-min` | `0` | Minutes to sleep between pages to reduce captcha risk. |
 | `--headless` | `1` | `1` = no browser window (default); `0` = visible window (for debugging and solving captchas manually). |
 | `--areas` | *(none)* | Comma-separated Yad2 area names (e.g. `'Rishon LeZion Area, Netanya Area'`). Overrides areas from preferences. If omitted, uses preferences or the default region. |
-
-**Examples:**
-
-```bash
-# Visible browser (e.g. to solve captchas)
-python yad2_pipeline.py --headless 0
-
-# Custom output folder and more pages
-python yad2_pipeline.py --output-dir my_output --max-pages 6
-
-# Specific areas (overrides scraper_preferences.json)
-python yad2_pipeline.py --areas "Netanya Area, Rishon LeZion Area"
-
-# Delay between pages to reduce captcha risk
-python yad2_pipeline.py --captcha-avoidance-min 1.5
-```
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 

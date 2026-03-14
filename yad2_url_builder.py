@@ -233,10 +233,17 @@ def build_yad2_url_from_json(
             )
     city_ids = _resolve_values(cities_list, city_map, "city")
 
+    # Yad2 expects singular "Area" / "City" when there is exactly one; use "multiArea" / "multiCity" for multiple.
     if area_ids:
-        query["multiArea"] = area_ids
+        if "," not in area_ids:
+            query["Area"] = area_ids
+        else:
+            query["multiArea"] = area_ids
     if city_ids:
-        query["multiCity"] = city_ids
+        if "," not in city_ids:
+            query["City"] = city_ids
+        else:
+            query["multiCity"] = city_ids
     if neighborhoods:
         query["multiNeighborhood"] = ",".join(str(n) for n in neighborhoods)
 
