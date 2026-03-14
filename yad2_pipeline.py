@@ -337,6 +337,7 @@ class Yad2Scraper:
         headless: bool = True,
         cities_to_skip: Optional[List[str]] = None,
         areas: Optional[List[str]] = None,
+        filter_preferences: Optional[Dict[str, Any]] = None,
     ):
         self.output_dir = output_dir
         self.images_dir = output_dir / "images"
@@ -349,38 +350,67 @@ class Yad2Scraper:
         self.run_summary = RunSummary()
         self.session = requests.Session()
 
+        # Filter preferences from config/filter_preferences.json (url_filters + post_filters)
+        prefs = filter_preferences if isinstance(filter_preferences, dict) else load_filter_preferences()
+        self._filter_preferences: Dict[str, Any] = prefs
+        url_filters = prefs.get("url_filters") or {}
+        post_filters = prefs.get("post_filters") or {}
+
         # Configuration knobs
-        # - max_pages: how many search result pages to visit per area (default 4)
-        # - captcha_avoidance_min: optional delay (in minutes) between pages to reduce captcha risk
-        # - headless: run browser without UI when True (default) or with visible window when False
-        # - cities_to_skip: list of city names to hard-skip after parsing (e.g. cities outside the desired zone)
-        # - areas: list of human-readable Yad2 "area" names to iterate over, as defined in assets/yad2_area_IDs.json
         self.max_pages = max(1, int(max_pages))
         self.captcha_avoidance_min = max(0.0, float(captcha_avoidance_min))
         self.headless = bool(headless)
+
+        # cities_to_skip: from post_filters, then override with explicit argument
         normalized_cities: Set[str] = set()
-        if cities_to_skip:
-            for c in cities_to_skip:
-                if c is None:
-                    continue
-                name = str(c).strip()
-                if name:
-                    normalized_cities.add(name)
+        for c in (post_filters.get("cities_to_skip") or []) + (cities_to_skip or []):
+            if c is None:
+                continue
+            name = str(c).strip()
+            if name:
+                normalized_cities.add(name)
         self.cities_to_skip: Set[str] = normalized_cities
 
-        # Areas to iterate over for search pages. If empty, we search only by big_area
-        # (i.e., the original behavior without per-area filtering).
-        self.areas: List[str] = [a for a in (areas or []) if str(a).strip()]
+        # search_groups computed below after loading mappings
 
-        # Load canonical Yad2 mappings for big_area / area / city IDs once per scraper.
+        # Load canonical Yad2 mappings (district / area / city) from assets first (needed for grouping)
         mappings_path = Path("assets") / "yad2_area_IDs.json"
         self.yad2_mappings = load_mappings(mappings_path)
 
-        # Derive the slug for the configured big area once (used to filter out
-        # unrelated listing links like recommendations from other regions).
-        self.big_area_name: str = "Center and Sharon"
-        big_area_map = self.yad2_mappings.get("big_area", {}) or {}
-        self.big_area_slug: str = big_area_map.get(self.big_area_name, "center-and-sharon")
+        # District from preferences is only used when both areas and cities are empty; otherwise we always deduce from the lists
+        default_district = str(prefs.get("district") or "Center and Sharon").strip()
+        pref_areas = prefs.get("areas") or []
+        pref_cities = prefs.get("cities") or []
+        # CLI or explicit `areas` overrides preferences.areas
+        areas_for_grouping = areas if areas else [a for a in pref_areas if str(a).strip()]
+        cities_for_grouping = [c for c in pref_cities if c and str(c).strip()]
+
+        # Deduce district(s) from areas/cities; group by district so each URL is valid for Yad2
+        self.search_groups: List[Tuple[str, List[str], List[str]]] = group_areas_and_cities_by_district(
+            self.yad2_mappings,
+            areas=areas_for_grouping if areas_for_grouping else None,
+            cities=cities_for_grouping if cities_for_grouping else None,
+            default_district=default_district,
+        )
+        if len(self.search_groups) > 1:
+            districts = [g[0] for g in self.search_groups]
+            logging.info(
+                "Areas/cities span multiple districts; splitting search and running each district separately: %s",
+                districts,
+            )
+
+        self.listing_type: str = str(prefs.get("listing_type") or "forsale").strip()
+        self.url_filters: Dict[str, Any] = dict(url_filters)
+
+        # Post-filters: publication cutoff (months -> days), max_floor_total
+        pub_months = post_filters.get("publication_cutoff_months")
+        self.publication_cutoff_days: int = int(pub_months * 30) if isinstance(pub_months, (int, float)) else 90
+        floor_total = post_filters.get("max_floor_total")
+        self.max_floor_total: int = int(floor_total) if isinstance(floor_total, (int, float)) else 7
+
+        # District slug map for link filtering (set per group during scrape)
+        district_map = self.yad2_mappings.get("district") or self.yad2_mappings.get("big_area") or {}
+        self._district_slug_map: Dict[str, str] = district_map if isinstance(district_map, dict) else {}
 
         self._setup_dirs()
         self._setup_logging()
@@ -1307,8 +1337,8 @@ class Yad2Scraper:
                 search_page_number=search_page_number,
             )
 
-            # Enforce publication date freshness filter (-3 months)
-            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=90)).date()
+            # Enforce publication date freshness (from post_filters.publication_cutoff_months)
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=self.publication_cutoff_days)).date()
             if record.publication_date_iso:
                 try:
                     pub_date = datetime.strptime(record.publication_date_iso, "%Y-%m-%d").date()
@@ -1466,8 +1496,9 @@ def main() -> None:
         max_pages=args.max_pages,
         captcha_avoidance_min=args.captcha_avoidance_min,
         headless=headless_bool,
-        cities_to_skip=cities_to_skip_list,
-        areas=areas_list,
+        cities_to_skip=cities_to_skip_legacy,
+        areas=areas_override,
+        filter_preferences=filter_prefs,
     )
     scraper.scrape()
 
