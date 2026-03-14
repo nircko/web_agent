@@ -1340,11 +1340,10 @@ class Yad2Scraper:
                 self.run_summary.total_listings_filtered_by_city += 1
                 return
 
-            # Enforce maximum total floors filter: if the building has more than 7
-            # floors in total, skip this listing (user preference).
-            if record.floor_total is not None and record.floor_total > 7:
+            # Enforce maximum total floors (from post_filters.max_floor_total)
+            if record.floor_total is not None and record.floor_total > self.max_floor_total:
                 logging.info(
-                    f"Listing {listing_id} has floor_total={record.floor_total} (> 7), "
+                    f"Listing {listing_id} has floor_total={record.floor_total} (> {self.max_floor_total}), "
                     "skipping listing without downloading images or debug artifacts."
                 )
                 self.run_summary.total_listings_filtered_by_floor += 1
@@ -1439,13 +1438,9 @@ def main() -> None:
     else:
         logging.warning("ORS_API_KEY not set, routing will be skipped.")
 
-    # Load cities_to_skip from dedicated config file, if present.
-    # Expected path: config/yad2_config.json with structure:
-    # {
-    #   "cities_to_skip": ["חיפה", "ירושלים"]
-    # }
+    # Optional legacy config: cities_to_skip from config/yad2_config.json (merged with filter_preferences)
     config_path = Path("config") / "yad2_config.json"
-    cities_to_skip_list: List[str] = []
+    cities_to_skip_legacy: List[str] = []
     if config_path.exists():
         try:
             raw_config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -1455,9 +1450,14 @@ def main() -> None:
                     continue
                 name = str(c).strip()
                 if name:
-                    cities_to_skip_list.append(name)
+                    cities_to_skip_legacy.append(name)
         except Exception as e:
             logging.warning(f"Failed to load cities_to_skip from {config_path}: {e}")
+
+    # Filter preferences: config/filter_preferences.json (url_filters + post_filters; cities max 3)
+    filter_prefs = load_filter_preferences()
+    # CLI --areas overrides filter_preferences.areas when provided
+    areas_override = areas_list if areas_list else None
 
     scraper = Yad2Scraper(
         output_dir=output_dir,
