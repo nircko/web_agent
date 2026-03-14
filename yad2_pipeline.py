@@ -406,60 +406,69 @@ class Yad2Scraper:
             force=True,
         )
 
-    def build_filtered_url(self, page_number: int, area_name: Optional[str] = None) -> str:
+    def build_filtered_url(
+        self,
+        page_number: int,
+        district: str,
+        group_areas: List[str],
+        group_cities: List[str],
+        area_name: Optional[str] = None,
+    ) -> str:
         """
-        Build a Yad2 search URL for the configured big area and a specific "area"
-        (sub-region) using the canonical ID mappings.
-
-        - `page_number`: which search page to fetch.
-        - `area_name`: a human-readable area label matching the 'area' keys in
-          assets/yad2_area_IDs.json (e.g. "Rishon LeZion Area"). If None, the
-          search is performed only by big area (no multiArea filter), which
-          reproduces the original behavior.
+        Build a Yad2 search URL for one district group: path uses district,
+        multiArea from area_name or group_areas, multiCity from group_cities (max 3).
         """
         areas_param: Optional[List[str]] = None
         if area_name:
             areas_param = [area_name]
+        elif group_areas:
+            areas_param = group_areas
 
         return build_yad2_url_from_json(
             self.yad2_mappings,
-            big_area="Center and Sharon",
-            listing_type="forsale",
+            district=district,
+            listing_type=self.listing_type,
             areas=areas_param,
-            cities=None,
+            cities=group_cities if group_cities else None,
             neighborhoods=None,
-            min_price=1600000,
-            max_price=3600000,
-            max_floor=4,
-            min_square_meter_build=90,
-            property_condition=[5, 3],
             page=page_number,
+            url_filters=self.url_filters,
         )
 
     def scrape(self) -> None:
         with sync_playwright() as p:
-            # Use the configured headless flag to control whether the browser shows a UI.
             browser = p.chromium.launch(headless=self.headless)
             try:
-                target_areas: List[Optional[str]] = self.areas or [None]
+                for district, group_areas, group_cities in self.search_groups:
+                    # Set district slug for link filtering (region_fragment in _process_search_page)
+                    self.big_area_slug = self._district_slug_map.get(district, "center-and-sharon")
+                    self.big_area_name = district
 
-                for area_name in target_areas:
-                    area_label = area_name if area_name is not None else "big_area_only"
-                    logging.info(f"Starting search for area: {area_label}")
+                    target_areas: List[Optional[str]] = group_areas if group_areas else [None]
+                    for area_name in target_areas:
+                        area_label = area_name if area_name is not None else "district_only"
+                        logging.info(
+                            "Starting search for district=%s area=%s cities=%s",
+                            district,
+                            area_label,
+                            group_cities or "all",
+                        )
 
-                    for page_number in range(1, self.max_pages + 1):
-                        search_url = self.build_filtered_url(page_number, area_name=area_name)
-                        self._process_search_page(browser, search_url, page_number)
-                        # Optional delay between pages to reduce captcha risk
-                        if self.captcha_avoidance_min > 0 and page_number < self.max_pages:
-                            delay_sec = self.captcha_avoidance_min * 60.0
-                            logging.info(
-                                f"Sleeping for {self.captcha_avoidance_min} minute(s) "
-                                f"({int(delay_sec)} seconds) before next search page to avoid captcha."
+                        for page_number in range(1, self.max_pages + 1):
+                            search_url = self.build_filtered_url(
+                                page_number, district, group_areas, group_cities, area_name=area_name
                             )
-                            time.sleep(delay_sec)
+                            self._process_search_page(browser, search_url, page_number)
+                            if self.captcha_avoidance_min > 0 and page_number < self.max_pages:
+                                delay_sec = self.captcha_avoidance_min * 60.0
+                                logging.info(
+                                    "Sleeping for %s minute(s) (%d seconds) before next search page to avoid captcha.",
+                                    self.captcha_avoidance_min,
+                                    int(delay_sec),
+                                )
+                                time.sleep(delay_sec)
 
-                logging.info("Finished processing all search pages for all areas.")
+                logging.info("Finished processing all search pages for all district groups.")
             finally:
                 browser.close()
 
@@ -546,7 +555,7 @@ class Yad2Scraper:
                 return count * 365
             return None
 
-        cutoff_days = 90
+        cutoff_days = self.publication_cutoff_days
 
         for card in cards:
             href = card.get_attribute("href") or ""
