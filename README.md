@@ -72,55 +72,84 @@ GEOCODING_EMAIL=your_email_for_nominatim_header
 
 After the setup script has completed successfully, you only need **one command per OS**.
 
-#### macOS / Linux (simple)
+#### Option A: Runner scripts (simple)
+
+**macOS / Linux:**
 
 ```bash
-cd /Users/nircko/GIT/web_agent
+cd /path/to/web_agent
 chmod +x scripts/run_yad2_macos.sh   # first time only
 ./scripts/run_yad2_macos.sh
 ```
 
-This script will:
+**Windows:** Open the `scripts\` folder and double‑click `run_yad2_windows.bat`, or from PowerShell:
 
-- Use the `.venv` Python created by `setup_yad2_scraper_macos.sh`.
-- Run the main pipeline with sensible defaults.
-- Write results to `./output`.
+```powershell
+cd C:\path\to\web_agent
+.\scripts\run_yad2_windows.bat
+```
 
-#### Windows (PowerShell / double‑click, simple)
+The runner uses the `.venv` from setup and writes results to `./output`.
 
-You can:
+#### Option B: Run `yad2_pipeline.py` directly
 
-- Open the `scripts\` folder and double‑click `run_yad2_windows.bat`, **or**
-- Run from PowerShell:
+From the project root, with the virtual environment activated:
 
-  ```powershell
-  cd C:\path\to\web_agent
-  .\scripts\run_yad2_windows.bat
-  ```
+```bash
+# Activate venv (macOS/Linux)
+source .venv/bin/activate
 
-The runner script will:
+# Run with defaults (output to ./output, 4 pages, headless)
+python yad2_pipeline.py
+```
 
-- Use the `.venv` Python created by `setup_yad2_scraper_windows.ps1`.
-- Run the main pipeline with sensible defaults.
-- Write results to `.\output`.
+**All CLI options:**
 
-If you prefer to run the Python command directly (advanced), see inside
-`run_yad2_macos.sh` or `run_yad2_windows.ps1` for the exact arguments.
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output-dir` | `output` | Root folder for CSV, images, debug, logs. |
+| `--max-pages` | `4` | Number of search result pages to visit per area. |
+| `--captcha-avoidance-min` | `0` | Minutes to sleep between pages to reduce captcha risk. |
+| `--headless` | `1` | `1` = no browser window (default); `0` = visible window (for debugging and solving captchas manually). |
+| `--areas` | *(none)* | Comma-separated Yad2 area names (e.g. `'Rishon LeZion Area, Netanya Area'`). Overrides areas from preferences. If omitted, uses preferences or the default region. |
 
-The script will:
+**Examples:**
 
-- Visit `--max-pages` search result pages **per area** (default 4 pages for each area in `--areas`, or for the whole big area if `--areas` is omitted).
-- Scrape and enrich all listings.
-- Persist progress after each listing.
-- Write logs to `output/logs/`.
-- Save debug artifacts for partial failures to `output/debug/`.
+```bash
+# Visible browser (e.g. to solve captchas)
+python yad2_pipeline.py --headless 0
 
-You can control browser visibility with:
+# Custom output folder and more pages
+python yad2_pipeline.py --output-dir my_output --max-pages 6
 
-- `--headless 1` (default): run Chromium **without** a visible window (faster, better for automated runs).
-- `--headless 0`: run Chromium **with** a visible window, which is useful for **debugging** and for **manually solving captchas** when they appear.
+# Specific areas (overrides scraper_preferences.json)
+python yad2_pipeline.py --areas "Netanya Area, Rishon LeZion Area"
 
-### 7. Outputs
+# Delay between pages to reduce captcha risk
+python yad2_pipeline.py --captcha-avoidance-min 1.5
+```
+
+The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
+
+### 4. Preferences (`scraper_preferences.json`)
+
+The scraper loads preferences from **`scraper_preferences.json`** in the project root. You can also use `config/filter_preferences.json` (nested format); the loader falls back to it if the root file is missing.
+
+**User-friendly format (root file):**
+
+- **default_region** — Used only when **areas** and **cities** are both empty. If you set areas or cities, district is deduced from those lists and this value is ignored.
+- **listing_type** — e.g. `"forsale"`.
+- **areas** — Optional list of area names (see `assets/yad2_area_IDs.json`). Each must belong to one district.
+- **cities** — Optional list of city names. At most 3 per district.
+- **price_min**, **price_max** — ILS.
+- **max_floor**, **min_square_meters**, **property_condition** — URL filters.
+- **publication_max_months** — Drop listings older than this many months.
+- **max_building_floors** — Skip listings in buildings with more floors than this.
+- **exclude_cities** — City names to exclude after parsing.
+
+CLI `--areas` overrides the areas from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
+
+### 5. Outputs
 
 - **CSV**: `output/listings_full.csv`
 - **Run summary**: `output/run_summary.json`
