@@ -161,7 +161,7 @@ For common problems and fixes, see the dedicated troubleshooting guide:
 
 - `TROUBLESHOOTING.md`
 
-### 9. Building a standalone Windows EXE (advanced)
+### 6. Building a standalone Windows EXE (advanced)
 
 If you want a single `.exe` file that includes Python and all dependencies for easier distribution on Windows:
 
@@ -180,4 +180,6 @@ If you want a single `.exe` file that includes Python and all dependencies for e
   - Optionally `config` and `.env` if you use routing/geocoding.
 
 Playwright still needs its browser binaries available on the target machine. On first run, if you encounter Playwright errors, see `TROUBLESHOOTING.md` for instructions.
+
+**Ready-for-Windows bundle:** The `ready_for_windows/` folder is a self-contained bundle you can copy to another Windows machine. After building the EXE (steps above), copy `dist\yad2_scraper.exe`, the `assets\` folder, optionally `config\` and `.env`, and the `.playwright\` folder (from project root after `python -m playwright install chromium`) into `ready_for_windows/`. Then zip or copy that folder. On the target PC, the user double-clicks `run_scraper.bat` and answers prompts (output path, pages, headless, areas). Results go to the chosen output folder (e.g. `ready_for_windows\output\`). For problems, see `TROUBLESHOOTING.md`.
 
