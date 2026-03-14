@@ -8,3 +8,6 @@ openrouteservice
 beautifulsoup4
 lxml
 rich
+ipykernel
+openpyxl
+chardet
