@@ -175,22 +175,25 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 - **publication_max_months** — Drop listings older than this many months.
 - **max_building_floors** — Skip listings in buildings with more floors than this.
 - **exclude_cities** — City names to exclude after parsing.
+- **private_only** — If `true`, only private (non‑agency) listings are exported. The scraper skips cards that show "תיווך"/"מתווך" on the search page and skips persisting any listing whose seller type is broker after opening the page. Set to `true` if you were seeing only real estate agencies (״תיווך״/״מתווך״) and want פרטי (private) publishers only.
+
+**Why were all results from agencies?** By default the scraper does not filter by seller type; Yad2 often shows agency listings first. Enable **private_only** in `scraper_preferences.json` to export only private (non‑broker) listings.
 
 CLI `--areas` overrides the areas from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
 
-### 5. Outputs
+### 6. Outputs
 
 - **CSV**: `output/listings_full.csv`
 - **Run summary**: `output/run_summary.json`
 - **Images**: `output/images/{listing_id}/001.jpg`, `002.jpg`, ...
-- **Debug**: `output/debug/`
+- **Debug**: `output/debug/` — PNG and HTML only for **exported** (post-filter) listings, for use with the summary PowerPoint.
 - **Logs**: `output/logs/`
 
 For common problems and fixes, see the dedicated troubleshooting guide:
 
 - `TROUBLESHOOTING.md`
 
-### 6. Building a standalone Windows EXE (advanced)
+### 7. Building a standalone Windows EXE (advanced)
 
 If you want a single `.exe` file that includes Python and all dependencies for easier distribution on Windows:
 

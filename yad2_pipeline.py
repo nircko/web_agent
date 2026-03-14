@@ -57,6 +57,7 @@ DEFAULT_FILTER_PREFERENCES = {
         "publication_cutoff_months": 3,
         "max_floor_total": 7,
         "cities_to_skip": [],
+        "private_only": False,
     },
 }
 
@@ -83,6 +84,8 @@ def _normalize_preferences(data: Dict[str, Any]) -> Dict[str, Any]:
         out["post_filters"]["max_floor_total"] = int(data["max_building_floors"])
     if "exclude_cities" in data and data["exclude_cities"] is not None:
         out["post_filters"]["cities_to_skip"] = list(data["exclude_cities"])
+    if "private_only" in data and data["private_only"] is not None:
+        out["post_filters"]["private_only"] = bool(data["private_only"])
     # Common keys in both formats
     if "listing_type" in data and data["listing_type"] is not None:
         out["listing_type"] = str(data["listing_type"]).strip()
@@ -152,6 +155,49 @@ def _process_file_decode(input_path: Union[str, Path], output_path: Union[str, P
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_fixed.to_excel(output_path, index=False, engine="openpyxl")
     logging.info("Fixed Hebrew file saved to: %s", output_path)
+
+
+def _is_broker_card(card_text: str) -> bool:
+    """
+    Real-estate filtering (private vs broker): decide if a search-result card should be
+    treated as broker/agency and skipped when private_only is enabled.
+
+    Logic:
+    - "ללא תיווך" (no brokerage) in the text → private listing → return False (do not skip).
+    - Agent indicators (only these) → return True (skip): "השארת פרטים" (leave details),
+      "מספר רישיון"/"מספר רשיון" (license number).
+    - Empty or no match → return False (keep the card).
+    """
+    if not (card_text or "").strip():
+        return False
+    text = card_text.strip()
+    if "ללא תיווך" in text:
+        return False
+    if re.search(r"השארת\s*פרטים|מספר\s*רישיון|מספר\s*רשיון", text):
+        return True
+    return False
+
+
+def _classify_seller_type_from_text(text: str) -> Optional[str]:
+    """
+    Classify seller type from listing page text for private_only filtering.
+
+    Logic:
+    - "ללא תיווך" → "private" (no brokerage).
+    - Broker indicators (only these): "השארת פרטים", "מספר רישיון"/"מספר רשיון" → "broker".
+    - "קבלן" → "contractor".
+    - Otherwise → None.
+    """
+    if not (text or "").strip():
+        return None
+    t = text.strip()
+    if "ללא תיווך" in t:
+        return "private"
+    if re.search(r"השארת\s*פרטים|מספר\s*רישיון|מספר\s*רשיון", t):
+        return "broker"
+    if "קבלן" in t:
+        return "contractor"
+    return None
 
 
 class CriticalFieldMissing(Exception):
@@ -248,6 +294,7 @@ class RunSummary:
     total_listings_filtered_by_date: int = 0
     total_listings_filtered_by_floor: int = 0
     total_listings_filtered_by_city: int = 0
+    total_listings_filtered_by_broker: int = 0
     total_exported_rows: int = 0
     total_partial_rows: int = 0
     total_failed_rows: int = 0
@@ -445,6 +492,7 @@ class Yad2Scraper:
         self.publication_cutoff_days: int = int(pub_months * 30) if isinstance(pub_months, (int, float)) else 90
         floor_total = post_filters.get("max_floor_total")
         self.max_floor_total: int = int(floor_total) if isinstance(floor_total, (int, float)) else 7
+        self.private_only: bool = bool(post_filters.get("private_only", False))
 
         # District slug map for link filtering (set per group during scrape)
         district_map = self.yad2_mappings.get("district") or self.yad2_mappings.get("big_area") or {}
@@ -525,7 +573,7 @@ class Yad2Scraper:
         )
         filters_table.add_row(
             "Post-filters",
-            f"publication ≤ {self.publication_cutoff_days // 30} months, max_floor_total {self.max_floor_total}, exclude_cities {list(self.cities_to_skip) or '[]'}",
+            f"publication ≤ {self.publication_cutoff_days // 30} months, max_floor_total {self.max_floor_total}, exclude_cities {list(self.cities_to_skip) or '[]'}, private_only={self.private_only}",
         )
         filters_table.add_row("Run", f"max_pages={self.max_pages}, headless={self.headless}, output={self.output_dir}")
 
@@ -724,6 +772,13 @@ class Yad2Scraper:
                 logging.info(
                     f"Skipping listing card on search page {page_number} as too old: "
                     f"~{days_ago} days ago (> {cutoff_days})"
+                )
+                continue
+
+            # When private_only: skip cards that look like broker/agency (see _is_broker_card logic)
+            if self.private_only and _is_broker_card(card_text):
+                logging.debug(
+                    f"Skipping listing card on search page {page_number} (broker/agency, private_only=True)"
                 )
                 continue
 
@@ -1144,15 +1199,10 @@ class Yad2Scraper:
             if candidate and 2 <= len(candidate) <= 60:
                 record.seller_name = candidate
 
-            # Seller type heuristic
-            lowered = parent_text.lower()
-            if "תיווך" in parent_text or "מתווך" in parent_text or "משרד" in parent_text:
-                record.seller_type = "broker"
-            elif "קבלן" in parent_text:
-                record.seller_type = "contractor"
-            else:
-                # Leave as None here; we may still infer later
-                pass
+            # Seller type from text (see _classify_seller_type_from_text logic; "תיווך" alone is OK)
+            classified = _classify_seller_type_from_text(parent_text)
+            if classified:
+                record.seller_type = classified
 
         # Basic feature flags from page text (best-effort, language-specific)
         # These rely on common Hebrew phrases appearing anywhere in the rendered text.
@@ -1512,6 +1562,14 @@ class Yad2Scraper:
 
             # Validate critical fields and save debug evidence if needed
             self._validate_critical_fields(record, page)
+
+            # When private_only: do not persist or save debug for broker/agency listings
+            if self.private_only and record.seller_type == "broker":
+                logging.info(
+                    f"Listing {listing_id} is broker/agency (תיווך); skipping export (private_only=True)."
+                )
+                self.run_summary.total_listings_filtered_by_broker += 1
+                return
 
             # Persist record to CSV and summary JSON after each listing
             self._append_record_to_csv(record)
