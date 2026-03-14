@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set, Union
 
 import openrouteservice
 import pandas as pd
@@ -20,10 +20,93 @@ from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from playwright.sync_api import sync_playwright, Page, Browser
 
-from yad2_url_builder import load_mappings, build_yad2_url_from_json
+from yad2_url_builder import (
+    load_mappings,
+    build_yad2_url_from_json,
+    group_areas_and_cities_by_district,
+    MAX_MULTI_CITIES,
+)
 
 
 BASE_SEARCH_URL = "https://www.yad2.co.il/realestate/forsale/center-and-sharon"
+
+# Default preferences when no file is found.
+DEFAULT_FILTER_PREFERENCES = {
+    "district": "Center and Sharon",
+    "listing_type": "forsale",
+    "areas": [],
+    "cities": [],
+    "url_filters": {
+        "minPrice": 1600000,
+        "maxPrice": 3600000,
+        "maxFloor": 4,
+        "minSquareMeterBuild": 90,
+        "propertyCondition": [5, 3],
+    },
+    "post_filters": {
+        "publication_cutoff_months": 3,
+        "max_floor_total": 7,
+        "cities_to_skip": [],
+    },
+}
+
+
+def _normalize_preferences(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Map user-friendly keys to internal format. Accepts both flat and nested formats."""
+    out = dict(DEFAULT_FILTER_PREFERENCES)
+    # User-friendly flat format (root scraper_preferences.json)
+    if "default_region" in data and data["default_region"] is not None:
+        out["district"] = str(data["default_region"]).strip()
+    if "price_min" in data and data["price_min"] is not None:
+        out["url_filters"]["minPrice"] = int(data["price_min"])
+    if "price_max" in data and data["price_max"] is not None:
+        out["url_filters"]["maxPrice"] = int(data["price_max"])
+    if "max_floor" in data and data["max_floor"] is not None:
+        out["url_filters"]["maxFloor"] = int(data["max_floor"])
+    if "min_square_meters" in data and data["min_square_meters"] is not None:
+        out["url_filters"]["minSquareMeterBuild"] = int(data["min_square_meters"])
+    if "property_condition" in data and data["property_condition"] is not None:
+        out["url_filters"]["propertyCondition"] = list(data["property_condition"])
+    if "publication_max_months" in data and data["publication_max_months"] is not None:
+        out["post_filters"]["publication_cutoff_months"] = int(data["publication_max_months"])
+    if "max_building_floors" in data and data["max_building_floors"] is not None:
+        out["post_filters"]["max_floor_total"] = int(data["max_building_floors"])
+    if "exclude_cities" in data and data["exclude_cities"] is not None:
+        out["post_filters"]["cities_to_skip"] = list(data["exclude_cities"])
+    # Common keys in both formats
+    if "listing_type" in data and data["listing_type"] is not None:
+        out["listing_type"] = str(data["listing_type"]).strip()
+    if "areas" in data and data["areas"] is not None:
+        out["areas"] = [a for a in data["areas"] if str(a).strip()] if isinstance(data["areas"], list) else []
+    if "cities" in data and data["cities"] is not None:
+        out["cities"] = [c for c in data["cities"] if c and str(c).strip()] if isinstance(data["cities"], list) else []
+    if "district" in data and data["district"] is not None:
+        out["district"] = str(data["district"]).strip()
+    # Nested format (legacy config/filter_preferences.json)
+    if "url_filters" in data and isinstance(data["url_filters"], dict):
+        out["url_filters"] = {**out["url_filters"], **data["url_filters"]}
+    if "post_filters" in data and isinstance(data["post_filters"], dict):
+        out["post_filters"] = {**out["post_filters"], **data["post_filters"]}
+    return out
+
+
+def load_filter_preferences(project_root: Optional[Path] = None) -> Dict[str, Any]:
+    """Load preferences from project root (scraper_preferences.json) or config/filter_preferences.json.
+    Uses user-friendly flat format when present; district in the file is only used when areas and cities
+    are both empty—otherwise district is always deduced from the areas/cities lists."""
+    root = project_root or Path(__file__).resolve().parent
+    for path in [root / "scraper_preferences.json"]:
+        if path.exists():
+            try:
+                raw = path.read_text(encoding="utf-8")
+                data = json.loads(raw)
+                if not isinstance(data, dict):
+                    return dict(DEFAULT_FILTER_PREFERENCES)
+                return _normalize_preferences(data)
+            except Exception as e:
+                logging.warning("Failed to load preferences from %s: %s, using defaults.", path, e)
+                return dict(DEFAULT_FILTER_PREFERENCES)
+    return dict(DEFAULT_FILTER_PREFERENCES)
 
 
 class CriticalFieldMissing(Exception):
