@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import chardet
 import sys
 import warnings
 import time
@@ -116,6 +117,41 @@ def load_filter_preferences(project_root: Optional[Path] = None) -> Dict[str, An
                 logging.warning("Failed to load preferences from %s: %s, using defaults.", path, e)
                 return dict(DEFAULT_FILTER_PREFERENCES)
     return dict(DEFAULT_FILTER_PREFERENCES)
+
+
+def _fix_hebrew_encoding(text: Any) -> Any:
+    """Try to repair Hebrew mojibake (e.g. latin-1 interpreted as windows-1255)."""
+    if not isinstance(text, str):
+        return text
+    try:
+        return text.encode("latin-1").decode("windows-1255")
+    except Exception:
+        try:
+            return text.encode("latin-1").decode("utf-8")
+        except Exception:
+            return text
+
+
+def _process_file_decode(input_path: Union[str, Path], output_path: Union[str, Path]) -> None:
+    """Read CSV (with chardet), apply Hebrew encoding fix, write Windows-compatible Excel (.xlsx)."""
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    file_ext = input_path.suffix.lower()
+
+    if file_ext == ".csv":
+        with open(input_path, "rb") as f:
+            result = chardet.detect(f.read(10000))
+            detected_enc = result.get("encoding") or "utf-8"
+        logging.info("Detected CSV encoding for export: %s", detected_enc)
+        df = pd.read_csv(input_path, encoding=detected_enc)
+    else:
+        df = pd.read_excel(input_path)
+
+    df_fixed = df.map(_fix_hebrew_encoding)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_fixed.to_excel(output_path, index=False, engine="openpyxl")
+    logging.info("Fixed Hebrew file saved to: %s", output_path)
 
 
 class CriticalFieldMissing(Exception):
@@ -578,6 +614,7 @@ class Yad2Scraper:
                                 time.sleep(delay_sec)
 
                 logging.info("Finished processing all search pages for all district groups.")
+                self._export_fixed_hebrew_xlsx()
             finally:
                 browser.close()
 
@@ -1390,6 +1427,17 @@ class Yad2Scraper:
             json.dumps(self.run_summary.to_dict(), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def _export_fixed_hebrew_xlsx(self) -> None:
+        """Create a Windows-compatible fixed_hebrew_file.xlsx in the output folder from listings_full.csv."""
+        if not self.output_csv.exists():
+            logging.info("No CSV file to export; skipping fixed_hebrew_file.xlsx.")
+            return
+        try:
+            out_xlsx = self.output_dir / "fixed_hebrew_file.xlsx"
+            _process_file_decode(self.output_csv, out_xlsx)
+        except Exception as e:
+            logging.warning("Failed to create fixed_hebrew_file.xlsx: %s", e)
 
     def _process_listing(
         self,
