@@ -1346,7 +1346,7 @@ class Yad2Scraper:
 
             record.missing_reason_code = reason
             record.extraction_notes = f"Missing critical fields ({reason}): {', '.join(missing)}"
-            self._save_debug_artifacts(page, record.yad2_listing_id, record.extraction_notes)
+            # Debug artifacts are saved only for exported listings (after _append_record_to_csv)
             self.run_summary.total_rows_with_missing_critical_fields += 1
 
     def _append_record_to_csv(self, record: ListingRecord) -> None:
@@ -1468,6 +1468,8 @@ class Yad2Scraper:
             # Persist record to CSV and summary JSON after each listing
             self._append_record_to_csv(record)
             self._persist_run_summary()
+            # Save debug PNG and HTML only for exported (post-filter) listings, for summary PowerPoint
+            self._save_debug_artifacts(page, record.yad2_listing_id, "exported")
         except Exception as e:
             logging.error(f"Failed to process listing {listing_id}: {e}", exc_info=True)
             self.run_summary.total_failed_rows += 1
