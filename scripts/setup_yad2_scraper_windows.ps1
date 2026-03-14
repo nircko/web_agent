@@ -37,7 +37,7 @@ if (Test-Path $venvPython) {
         Remove-Item -Recurse -Force ".venv"
     }
 }
-
+ 
 if (-not $reuseVenv) {
     # Ensure Python 3.12 is installed (try to auto-install via winget when possible)
     # We are strict here: Playwright requires Python >= 3.8, and this project is
