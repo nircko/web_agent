@@ -139,13 +139,13 @@ python yad2_pipeline.py --headless 0
 python yad2_pipeline.py --output-dir my_output --max-pages 6
 
 # Specific areas (overrides scraper_preferences.json)
-python yad2_pipeline.py --areas "Netanya Area, Rishon LeZion Area"
+python yad2_pipeline.py --locations "Netanya, Rishon LeZion"
 ```
 
 On Windows, use double quotes for arguments with spaces:
 
 ```powershell
-python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" --areas "Ramat Gan & Givatayim Area, Netanya Area"
+python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" --locations "Ramat Gan, Netanya"
 ```
 
 **All CLI options:**
@@ -156,7 +156,7 @@ python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" -
 | `--max-pages` | `4` | Number of search result pages to visit per area. |
 | `--captcha-avoidance-min` | `0` | Minutes to sleep between pages to reduce captcha risk. |
 | `--headless` | `1` | `1` = no browser window (default); `0` = visible window (for debugging and solving captchas manually). |
-| `--areas` | *(none)* | Comma-separated Yad2 area names (e.g. `'Rishon LeZion Area, Netanya Area'`). Overrides areas from preferences. If omitted, uses preferences or the default region. |
+| `--locations` | *(none)* | City/area to search (unified for Yad2 and Madlan). English or legacy names, comma-separated (e.g. `'Haifa'`, `'Haifa, Rehovot'`, `'Rishon LeZion Area'`). Resolved via `assets/unified_location_names.json`. If omitted, uses areas/cities from preferences. |
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 
@@ -211,7 +211,7 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 
 **Why were all results from agencies?** By default the scraper does not filter by seller type; Yad2 often shows agency listings first. Enable **private_only** in `scraper_preferences.json` to export only private (non‑broker) listings.
 
-CLI `--areas` overrides the areas from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
+CLI `--locations` overrides the areas/cities from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
 
 #### Madlan (madlan.co.il) scraper
 
