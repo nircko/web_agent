@@ -35,11 +35,13 @@ from yad2_pipeline import (
     _export_listings_to_formatted_excel,
     _classify_seller_type_from_text,
     _is_broker_card,
+    load_filter_preferences,
 )
 from listing_extract_common import (
     parse_float,
     parse_int,
     extract_ssr_hydrated_context,
+    extract_ssr_dates_and_phone,
     deep_find_poi_ssr,
     extract_assumed_design_range,
     extract_schema_org_real_estate_features,
@@ -95,8 +97,7 @@ def _default_madlan_preferences() -> Dict[str, Any]:
         "exclude_neighborhoods": [],
         "private_only": False,
         "captcha_avoidance_min": 0.0,
-        "listing_open_delay_sec": 2.0,
-        "captcha_solve_wait_sec": 5,
+        "listing_open_delay_sec": 15.0,
         "trust_url_seller_filter": True,
         "use_israel_bbox": False,
         "bbox": [33.29348, 29.48782, 36.86953, 33.33522],
@@ -115,7 +116,14 @@ class MadlanScraper:
         neighborhoods_to_skip: Optional[List[str]] = None,
         madlan_preferences: Optional[Dict[str, Any]] = None,
         export_slug: Optional[str] = None,
+        captcha_solve_seconds: Optional[int] = None,
+        listing_open_delay_sec: Optional[float] = None,
     ):
+        """
+        Optional captcha_solve_seconds / listing_open_delay_sec: user overrides (e.g. from CLI).
+        If set, override the values from preferences so the user can increase time for Madlan
+        (captcha solving is often more time-consuming on Madlan).
+        """
         self.output_dir = Path(output_dir)
         self.export_slug = (export_slug or "").strip() or None
         self.images_dir = self.output_dir / "images"
@@ -153,8 +161,34 @@ class MadlanScraper:
         self.private_only = self.private_only_madlan
         self.trust_url_seller_filter = bool(prefs.get("trust_url_seller_filter", True))
         self.captcha_avoidance_min = max(0.0, float(prefs.get("captcha_avoidance_min", 0)))
-        self.listing_open_delay_sec = max(0.0, float(prefs.get("listing_open_delay_sec", 2.0)))
-        self.captcha_solve_wait_sec = max(2, int(prefs.get("captcha_solve_wait_sec", 5)))
+        # listing_open_delay_sec: delay before opening each listing tab; user can override to reduce new windows
+        _delay_from_prefs = max(0.0, float(prefs.get("listing_open_delay_sec", 15.0)))
+        if listing_open_delay_sec is not None and listing_open_delay_sec >= 0:
+            self.listing_open_delay_sec = max(0.0, float(listing_open_delay_sec))
+            logging.info("Using user override: listing_open_delay_sec=%.1f (Madlan)", self.listing_open_delay_sec)
+        else:
+            self.listing_open_delay_sec = _delay_from_prefs
+        # captcha_solve_seconds: unified with Yad2 from scraper_preferences.json (root); Madlan prefs can override for this site; user can override per-run
+        try:
+            _shared = load_filter_preferences()
+        except Exception:
+            _shared = {}
+        _shared = _shared if isinstance(_shared, dict) else {}
+        _captcha_from_prefs = max(
+            5,
+            int(
+                prefs.get("captcha_solve_seconds")
+                or prefs.get("captcha_solve_wait_sec")
+                or prefs.get("captcha_initial_wait_sec")
+                or _shared.get("captcha_solve_seconds")
+                or 45
+            ),
+        )
+        if captcha_solve_seconds is not None and captcha_solve_seconds >= 5:
+            self.captcha_solve_seconds = max(5, int(captcha_solve_seconds))
+            logging.info("Using user override: captcha_solve_seconds=%s (Madlan)", self.captcha_solve_seconds)
+        else:
+            self.captcha_solve_seconds = _captcha_from_prefs
         self.madlan_config = load_madlan_config()
 
         self._setup_dirs()
@@ -195,31 +229,53 @@ class MadlanScraper:
             url_filters=self._prefs,
         )
 
+    def _is_challenge_page(self, page: Page) -> bool:
+        """True if the page is a Madlan/ShieldSquare challenge (check title and body text)."""
+        title = ""
+        body = ""
+        try:
+            title = page.title() or ""
+        except Exception:
+            pass
+        try:
+            body = page.inner_text("body") or ""
+        except Exception:
+            pass
+        combined = (title + " " + body)
+        if "ShieldSquare" in combined or "Captcha" in combined:
+            return True
+        # Madlan challenge: "סליחה על ההפרעה... בזמן שגלשת ב www.madlan.co.il משהו בדפדפן שלך גרם לנו לחשוב שאתה רובוט"
+        if "סליחה על ההפרעה" in combined:
+            return True
+        if "בזמן שגלשת" in combined and "madlan" in combined.lower():
+            return True
+        if "גרם לנו לחשוב שאתה רובוט" in combined or ("רובוט" in combined and "משהו בדפדפן" in combined):
+            return True
+        if "ההפרעה" in combined and "madlan" in combined.lower():
+            return True
+        return False
+
     def _wait_for_captcha_solved(self, page: Page, context: str) -> None:
-        """If the page shows ShieldSquare/captcha and we're not headless, wait for user to solve it (same as Yad2)."""
-        wait_ms = self.captcha_solve_wait_sec * 1000
+        """When a challenge/captcha page is detected, give the user time to solve it (supports 2 consecutive captchas)."""
         while True:
-            try:
-                title = page.title() or ""
-            except Exception:
-                title = ""
-            if "ShieldSquare" not in title and "Captcha" not in title:
+            if not self._is_challenge_page(page):
                 break
             if self.headless:
                 logging.warning(
-                    "Captcha/ShieldSquare detected on %s but running headless; "
-                    "cannot wait for manual solve. Consider --headless 0.",
+                    "Challenge page detected on %s but running headless; cannot wait. Use headless=False.",
                     context,
                 )
                 break
             logging.info(
-                "Captcha/ShieldSquare detected on %s. You have time to solve it in the browser; "
-                "then press Enter here to continue (waiting %s s after).",
+                "Challenge/captcha detected on %s. You have %s seconds to solve it (sometimes 2 in a row). "
+                "Increase captcha_solve_seconds in preferences if you need more time.",
                 context,
-                self.captcha_solve_wait_sec,
+                self.captcha_solve_seconds,
             )
-            input("Press Enter when the real page is visible to continue... ")
-            page.wait_for_timeout(wait_ms)
+            page.wait_for_timeout(self.captcha_solve_seconds * 1000)
+            input("Press Enter when the real page is visible (or after solving a second captcha)... ")
+            # Wait again so a second consecutive captcha gets full time before we re-check
+            page.wait_for_timeout(self.captcha_solve_seconds * 1000)
         return
 
     def _normalize_phone(self, raw: str) -> str:
@@ -246,10 +302,38 @@ class MadlanScraper:
         t.add_row("Last publication month", str(self._prefs.get("last_publication_month", self._prefs.get("publication_max_months", 3))))
         t.add_row("Max building floors", str(self.max_floor_total))
         t.add_row("Listing open delay (sec)", str(self.listing_open_delay_sec))
-        t.add_row("Captcha solve wait (sec)", str(self.captcha_solve_wait_sec))
+        t.add_row("Captcha solve (sec)", str(self.captcha_solve_seconds) + " (Madlan default 45 s; use ≥45 for consecutive captchas)")
         t.add_row("Private only (detail)", str(self.private_only))
         t.add_row("Trust URL seller filter", str(self.trust_url_seller_filter))
         console.print(Panel(t, title="[bold cyan] Madlan input filters [/]", border_style="cyan"))
+
+    def _warn_if_captcha_time_short(self) -> None:
+        """If captcha_solve_seconds < 45, show a very visible warning: Madlan often shows consecutive captchas."""
+        if self.captcha_solve_seconds >= 45:
+            return
+        msg = (
+            f"  CAPTCHA WAIT TIME TOO SHORT: you have {self.captcha_solve_seconds} s. "
+            "Madlan sometimes shows 2 consecutive captcha quizzes — 45 s or more is recommended. "
+            "Set captcha_solve_seconds in the madlan section of scraper_preferences.json or madlan_preferences.json, "
+            "or run with: --captcha-solve-seconds 45 (or 60)."
+        )
+        logging.warning(msg)
+        try:
+            console = Console()
+            console.print(
+                Panel(
+                    f"[bold red]⚠ CAPTCHA WAIT TIME TOO SHORT ({self.captcha_solve_seconds} s)[/]\n\n"
+                    "Madlan often shows [bold]2 consecutive captcha quizzes[/]. "
+                    "A wait time of [bold]45 seconds or more[/] is recommended.\n\n"
+                    "Increase it by:\n"
+                    "  • Setting [cyan]captcha_solve_seconds[/] in the [cyan]madlan[/] section of scraper_preferences.json (or madlan_preferences.json), or\n"
+                    "  • Running with: [cyan]--captcha-solve-seconds 45[/] (or 60)",
+                    title="[bold red] Madlan scraper warning [/]",
+                    border_style="red",
+                )
+            )
+        except Exception:
+            print("\n*** WARNING: captcha_solve_seconds is", self.captcha_solve_seconds, "— recommend 45+ for Madlan (consecutive captchas). ***\n", file=sys.stderr)
 
     def _persist_run_summary(self) -> None:
         """Same as Yad2: write run_summary.json."""
@@ -280,6 +364,7 @@ class MadlanScraper:
 
     def scrape(self) -> None:
         self._print_run_plan()
+        self._warn_if_captcha_time_short()
         try:
             asyncio.get_running_loop()
             running_async = True
@@ -341,7 +426,12 @@ class MadlanScraper:
 
         self.run_summary.total_unique_listings_found = len(self.seen_listing_ids)
         for i, (listing_id, listing_url) in enumerate(listing_links):
-            if i > 0 and self.listing_open_delay_sec > 0:
+            if self.listing_open_delay_sec > 0:
+                logging.info(
+                    "Waiting %.1f s before opening %s listing (no new window until you have time to solve captcha).",
+                    self.listing_open_delay_sec,
+                    "next" if i > 0 else "first",
+                )
                 time.sleep(self.listing_open_delay_sec)
             self._process_listing(browser, page_number, url, listing_id, listing_url)
         page.close()
@@ -361,7 +451,7 @@ class MadlanScraper:
             page.goto(listing_url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
             self._wait_for_captcha_solved(page, f"listing {listing_id}")
-            page.wait_for_timeout(self.captcha_solve_wait_sec * 1000)
+            page.wait_for_timeout(2000)
             record = self._extract_from_listing_page(
                 page, listing_id, listing_url, filtered_search_url, search_page_number
             )
@@ -435,9 +525,12 @@ class MadlanScraper:
                 record.year_built = int(float(poi["buildingYear"]))
             except (TypeError, ValueError):
                 pass
+        # Apartment floor from SSR only if sane (1–50); poi sometimes has sqm in "floor" and corrupts
         if poi.get("floor") is not None and record.floor_current is None:
             try:
-                record.floor_current = int(float(poi["floor"]))
+                _f = int(float(poi["floor"]))
+                if 1 <= _f <= 50:
+                    record.floor_current = _f
             except (TypeError, ValueError):
                 pass
         for k in ("totalFloors", "floorsInBuilding", "buildingFloors", "maxFloor"):
@@ -461,12 +554,24 @@ class MadlanScraper:
         if amen.get("balcony"):
             record.balcony_count = record.balcony_count or 1
 
-        # Price: ₪2,200,000
-        price_el = soup.find(string=re.compile(r"₪\s*[\d,\.]+")) or soup.find(string=re.compile(r"[\d,\.]+\s*מ'"))
-        if price_el:
-            record.price_ils = parse_float(str(price_el))
-        if not record.price_ils and re.search(r"₪\s*([\d,\.]+)", text):
-            record.price_ils = parse_float(re.search(r"₪\s*([\d,\.]+)", text).group(1))
+        # Price: ₪2,200,000 — collect all ₪ numbers and take the main listing price (largest plausible, > 50k)
+        all_prices = []
+        for m in re.finditer(r"₪\s*([\d,\.]+)", text):
+            p = parse_float(m.group(1))
+            if p is not None and p > 0:
+                all_prices.append(p)
+        if all_prices:
+            main_price = max(p for p in all_prices if p >= 50000) if any(p >= 50000 for p in all_prices) else max(all_prices)
+            if main_price >= 50000:
+                record.price_ils = main_price
+        if record.price_ils is None or record.price_ils < 50000:
+            price_el = soup.find(string=re.compile(r"₪\s*[\d,\.]+"))
+            if price_el:
+                p = parse_float(str(price_el))
+                if p and p >= 50000:
+                    record.price_ils = p
+        if (record.price_ils is None or record.price_ils < 50000) and all_prices:
+            record.price_ils = max(all_prices)
 
         # Rooms, floor, size — SSR first, then regex
         if not record.rooms and poi.get("rooms") is not None:
@@ -474,18 +579,30 @@ class MadlanScraper:
                 record.rooms = float(poi["rooms"])
             except (TypeError, ValueError):
                 pass
-        rooms_m = re.search(r"(\d+(?:\.\d+)?)\s*חדרים?", text)
+        rooms_m = re.search(r"(\d+(?:\.\d+)?)\s*חדרים?|(\d+)\s*rooms?\b", text, re.I)
         if rooms_m:
-            record.rooms = parse_float(rooms_m.group(1))
-        floor_m = re.search(r"קומה\s*(\d+)", text)
-        if floor_m and record.floor_current is None:
-            record.floor_current = parse_int(floor_m.group(1))
-        floor_tot_m = re.search(r"קומות\s*בבניין\s*(\d+)|מתוך\s*(\d+)\s*קומות", text)
+            record.rooms = parse_float(rooms_m.group(1) or rooms_m.group(2))
+        # Apartment floor: Hebrew "קומה X", English "X Floor" or "Xnd floor" / "on the Xnd floor"
+        if record.floor_current is None:
+            floor_m = re.search(r"קומה\s*(\d+)", text)
+            if floor_m:
+                record.floor_current = parse_int(floor_m.group(1))
+        if record.floor_current is None:
+            floor_en = re.search(r"(?:on the |apartment is on the )?(\d+)(?:st|nd|rd|th)?\s*floor", text, re.I)
+            if floor_en:
+                record.floor_current = parse_int(floor_en.group(1))
+        if record.floor_current is None:
+            floor_short = re.search(r"\b(\d+)\s*floor\b", text, re.I)
+            if floor_short and (record.floor_total is None or (parse_int(floor_short.group(1)) or 0) <= (record.floor_total or 99)):
+                record.floor_current = parse_int(floor_short.group(1))
+        floor_tot_m = re.search(r"floors?\s+in\s+building[:\s]*(\d+)|קומות\s*בבניין\s*(\d+)|מתוך\s*(\d+)\s*קומות", text, re.I)
         if floor_tot_m:
-            record.floor_total = parse_int(floor_tot_m.group(1) or floor_tot_m.group(2))
-        size_m = re.search(r"(\d+)\s*מ[\"']?ר", text)
+            record.floor_total = parse_int(floor_tot_m.group(1) or floor_tot_m.group(2) or floor_tot_m.group(3))
+        size_m = re.search(r"(\d+)\s*מ[\"']?ר|(\d+)\s*sqm", text, re.I)
         if size_m:
-            record.built_sqm = parse_float(size_m.group(1))
+            record.built_sqm = parse_float(size_m.group(1) or size_m.group(2))
+        if record.floor_current is not None and record.built_sqm is not None and record.floor_current == record.built_sqm:
+            record.floor_current = None
         if poi.get("size") is not None and not record.built_sqm:
             try:
                 record.built_sqm = float(poi["size"])
@@ -586,27 +703,29 @@ class MadlanScraper:
         if schema_feats:
             record.extra_features = (record.extra_features or "") + " | schema:" + json.dumps(schema_feats, ensure_ascii=False)[:500]
 
-        # Publication date if present
-        pub_m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", text)
-        if pub_m:
-            record.publication_date_raw = f"{pub_m.group(1)}/{pub_m.group(2)}/{pub_m.group(3)}"
-            try:
-                record.publication_date_iso = f"{pub_m.group(3)}-{int(pub_m.group(2)):02d}-{int(pub_m.group(1)):02d}"
-            except ValueError:
-                pass
+        # Publication date and phone from page source (SSR / JSON-LD): releaseDate, datePublished, lastUpdate, telephone
+        dates_phone = extract_ssr_dates_and_phone(html, soup)
+        if dates_phone.get("publication_date_iso") or dates_phone.get("publication_date_raw"):
+            record.publication_date_raw = record.publication_date_raw or dates_phone.get("publication_date_raw")
+            record.publication_date_iso = record.publication_date_iso or dates_phone.get("publication_date_iso")
+        if not record.publication_date_raw and not record.publication_date_iso:
+            record.publication_date_raw = "WebsiteNotSupported"
+        if dates_phone.get("last_update_raw") or dates_phone.get("last_update_iso"):
+            record.extra_features = (record.extra_features or "") + " | last_update:" + (dates_phone.get("last_update_iso") or dates_phone.get("last_update_raw") or "")
 
-        # Phone: same as Yad2 (tel: link, then span with 05, then regex on body)
-        raw_phone = None
-        phone_method = None
-        try:
-            tel_link = page.query_selector("a[href^='tel:']")
-            if tel_link:
-                href = tel_link.get_attribute("href") or ""
-                if href.startswith("tel:"):
-                    raw_phone = href[len("tel:"):].strip()
-                    phone_method = "dom_tel_link"
-        except Exception:
-            pass
+        # Phone: prefer page source (SSR/JSON releaseDate, telephone), then DOM (tel: link, span), then regex on body
+        raw_phone = dates_phone.get("phone_from_source")
+        phone_method = "ssr_or_json" if raw_phone else None
+        if not raw_phone:
+            try:
+                tel_link = page.query_selector("a[href^='tel:']")
+                if tel_link:
+                    href = tel_link.get_attribute("href") or ""
+                    if href.startswith("tel:"):
+                        raw_phone = href[len("tel:"):].strip()
+                        phone_method = "dom_tel_link"
+            except Exception:
+                pass
         if not raw_phone:
             try:
                 phone_span = page.query_selector("span:has-text('05'), div:has-text('05')")
@@ -774,11 +893,33 @@ class MadlanScraper:
 def main() -> None:
     load_dotenv()
     import argparse
-    parser = argparse.ArgumentParser(description="Madlan (madlan.co.il) for-sale scraper")
-    parser.add_argument("--output-dir", type=str, default="output_madlan", help="Output directory")
-    parser.add_argument("--max-pages", type=int, default=4, help="Search pages to scrape")
-    parser.add_argument("--headless", type=int, choices=[0, 1], default=1, help="1=headless, 0=visible")
-    parser.add_argument("--captcha-avoidance-min", type=float, default=0, help="Minutes to sleep between search pages (same as Yad2)")
+    parser = argparse.ArgumentParser(
+        description="Madlan (madlan.co.il) for-sale scraper. Captcha solving is often more time-consuming on Madlan; use --captcha-solve-seconds to increase time."
+    )
+    parser.add_argument("--output-dir", type=str, default="output_madlan", help="Output directory (default: output_madlan)")
+    parser.add_argument("--max-pages", type=int, default=4, help="Number of search pages to scrape (default: 4)")
+    parser.add_argument("--headless", type=int, choices=[0, 1], default=1, help="1=headless, 0=visible browser (default: 1)")
+    parser.add_argument("--captcha-avoidance-min", type=float, default=0, help="Minutes to sleep between search pages to reduce captcha risk (default: 0)")
+    parser.add_argument(
+        "--captcha-solve-seconds",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "Override seconds to wait for you to solve a captcha (default from scraper_preferences.json or madlan section). "
+            "Madlan captcha is often more time-consuming; increase (e.g. 60) if you need more time. Applies to this run only."
+        ),
+    )
+    parser.add_argument(
+        "--listing-open-delay-sec",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "Override seconds to wait before opening each new listing tab (default from preferences, usually 15). "
+            "Increase to reduce opening too many windows and give time to solve captcha. Applies to this run only."
+        ),
+    )
     parser.add_argument(
         "--locations",
         type=str,
@@ -813,6 +954,10 @@ def main() -> None:
     if args.captcha_avoidance_min is not None and args.captcha_avoidance_min > 0:
         prefs["captcha_avoidance_min"] = args.captcha_avoidance_min
 
+    # User overrides for this run (passed to scraper; it logs "Using user override" when used)
+    captcha_override = args.captcha_solve_seconds if (args.captcha_solve_seconds is not None and args.captcha_solve_seconds >= 5) else None
+    listing_delay_override = args.listing_open_delay_sec
+
     email = os.getenv("GEOCODING_EMAIL", "example@example.com")
     geocoder = Geocoder(email=email)
     ors_key = os.getenv("ORS_API_KEY")
@@ -826,6 +971,8 @@ def main() -> None:
         headless=bool(args.headless),
         madlan_preferences=prefs,
         export_slug=export_slug,
+        captcha_solve_seconds=captcha_override,
+        listing_open_delay_sec=listing_delay_override,
     )
     scraper.scrape()
     print("Done. CSV:", scraper.output_csv)
