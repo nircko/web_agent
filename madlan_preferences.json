@@ -1,0 +1,17 @@
+{
+  "locations": ["חיפה"],
+  "price_min": 1900000,
+  "price_max": 2500000,
+  "rooms_min": 4,
+  "rooms_max": 6,
+  "property_condition": ["toRenovated", "preserved"],
+  "seller_type": "private",
+  "max_floor": 4,
+  "min_square_meters": 90,
+  "publication_max_months": 3,
+  "max_building_floors": 7,
+  "exclude_cities": [],
+  "exclude_neighborhoods": [],
+  "private_only": false,
+  "captcha_avoidance_min": 0
+}
