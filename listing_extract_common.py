@@ -256,3 +256,75 @@ def extract_investment_context_from_text(text: str) -> Tuple[str, str]:
         if he in text:
             nuis.append(tag)
     return ", ".join(sorted(set(transit))), ", ".join(sorted(set(nuis)))
+
+
+def map_schema_boolean_to_amenities(features: Dict[str, str]) -> Dict[str, bool]:
+    """Map Hebrew/English additionalProperty labels to booleans (elevator, mamad, etc.)."""
+    elevator = mamad = ac = balcony = solar = bars = False
+    full = " ".join(f"{k} {v}" for k, v in features.items()).lower()
+
+    def yes(v: str) -> bool:
+        return v in ("yes", "כן", "true", "1") or "כן" in v
+
+    for k, v in features.items():
+        kl = k.lower()
+        vl = v.lower()
+        if "מעלית" in k or "elevator" in kl:
+            elevator = yes(vl) or "כן" in v
+        if "ממד" in k or "מיק" in k or "safe" in kl or "mamad" in kl:
+            mamad = yes(vl) or "כן" in v
+        if "מיזוג" in k or "air" in kl:
+            ac = yes(vl) or "כן" in v
+        if "מרפסת" in k or "balcony" in kl:
+            balcony = yes(vl) or "כן" in v
+        if "שמש" in k or "סולאר" in k or "solar" in kl:
+            solar = yes(vl) or "כן" in v
+        if "סורג" in k or "bars" in kl or "גריל" in k:
+            bars = yes(vl) or "כן" in v
+
+    if "מעלית" in full:
+        elevator = True
+    if "ממ\"ד" in full or "ממד" in full:
+        mamad = True
+    return {
+        "elevator": elevator,
+        "mamad": mamad,
+        "air_conditioning": ac,
+        "balcony": balcony,
+        "solar_heater": solar,
+        "window_bars": bars,
+    }
+
+
+def build_technical_profile_en(
+    *,
+    year_built: Optional[int],
+    total_floors_building: Optional[int],
+    apartment_floor: Optional[int],
+    price_ils: Optional[float],
+    built_sqm: Optional[float],
+    rooms: Optional[float],
+    condition_en: Optional[str],
+    assumed_design_range: Optional[str],
+    amenities: Dict[str, bool],
+    transit_tags: str,
+    nuisance_tags: str,
+) -> str:
+    """Single English summary block for CSV/debug."""
+    lines = []
+    lines.append("Construction: year_built=%s, total_floors=%s, apartment_floor=%s, scale=%s" % (
+        year_built, total_floors_building, apartment_floor, assumed_design_range or "—"
+    ))
+    pps = (price_ils / built_sqm) if price_ils and built_sqm and built_sqm > 0 else None
+    lines.append(
+        "Financials: price=%s, price_per_sqm=%s"
+        % (price_ils, round(pps, 1) if pps else "—")
+    )
+    lines.append(
+        "Technical: size_sqm=%s, rooms=%s, condition=%s"
+        % (built_sqm, rooms, condition_en or "—")
+    )
+    on = [k for k, v in amenities.items() if v]
+    lines.append("Amenities: %s" % (", ".join(on) or "—"))
+    lines.append("Investment: transit=[%s], nuisances=[%s]" % (transit_tags or "—", nuisance_tags or "—"))
+    return " | ".join(lines)
