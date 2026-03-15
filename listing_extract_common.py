@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from bs4 import BeautifulSoup
 
@@ -204,3 +204,55 @@ def _walk_additional_property(obj: Any, out: Dict[str, str]) -> None:
     elif isinstance(obj, list):
         for x in obj:
             _walk_additional_property(x, out)
+
+
+# Hebrew condition -> English (Madlan / Yad2 labels)
+CONDITION_HE_TO_EN = {
+    "משופצת": "renovated",
+    "לשיפוץ": "to renovate",
+    "דורש שיפוץ": "needs renovation",
+    "שמורה": "well maintained",
+    "חדש": "new",
+    "חדשה": "new",
+    "משופץ": "renovated",
+    "במצב טוב": "good condition",
+}
+
+
+def translate_condition_label(hebrew: str) -> str:
+    t = (hebrew or "").strip()
+    for he, en in CONDITION_HE_TO_EN.items():
+        if he in t:
+            return en
+    return t or "unknown"
+
+
+# Investment / description keywords (Hebrew -> English tags)
+TRANSIT_KEYWORDS = [
+    ("רק\"ל", "light_rail"),
+    ("רקל", "light_rail"),
+    ("מטרו", "metro"),
+    ("איילון", "ayalon_highway"),
+    ("רכבת", "train"),
+]
+NUISANCE_KEYWORDS = [
+    ("חניה", "parking"),
+    ("חניות", "parking"),
+    ("רעש", "noise"),
+    ("בנייה", "construction"),
+]
+
+
+def extract_investment_context_from_text(text: str) -> Tuple[str, str]:
+    """Returns (transit_mentions_en, nuisance_mentions_en) comma-separated tags."""
+    if not text:
+        return "", ""
+    transit = []
+    for he, tag in TRANSIT_KEYWORDS:
+        if he in text:
+            transit.append(tag)
+    nuis = []
+    for he, tag in NUISANCE_KEYWORDS:
+        if he in text:
+            nuis.append(tag)
+    return ", ".join(sorted(set(transit))), ", ".join(sorted(set(nuis)))
