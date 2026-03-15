@@ -172,3 +172,35 @@ def _ld_breadcrumb_items(data: Any) -> List[str]:
         for x in data:
             out.extend(_ld_breadcrumb_items(x))
     return out
+
+
+def extract_schema_org_real_estate_features(soup: BeautifulSoup) -> Dict[str, Any]:
+    """Parse JSON-LD RealEstateListing: additionalProperty name/value -> features."""
+    features: Dict[str, str] = {}
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw = (script.string or script.get_text() or "").strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        _walk_additional_property(data, features)
+    return features
+
+
+def _walk_additional_property(obj: Any, out: Dict[str, str]) -> None:
+    if isinstance(obj, dict):
+        if "additionalProperty" in obj:
+            for prop in obj.get("additionalProperty") or []:
+                if not isinstance(prop, dict):
+                    continue
+                name = (prop.get("name") or prop.get("@type") or "").strip()
+                val = prop.get("value")
+                if val is not None:
+                    out[name or "unknown"] = str(val).strip()
+        for v in obj.values():
+            _walk_additional_property(v, out)
+    elif isinstance(obj, list):
+        for x in obj:
+            _walk_additional_property(x, out)
