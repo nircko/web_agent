@@ -156,7 +156,7 @@ python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" -
 | `--max-pages` | `4` | Number of search result pages to visit per area. |
 | `--captcha-avoidance-min` | `0` | Minutes to sleep between pages to reduce captcha risk. |
 | `--headless` | `1` | `1` = no browser window (default); `0` = visible window (for debugging and solving captchas manually). |
-| `--locations` | *(none)* | City/area to search (unified for Yad2 and Madlan). English or legacy names, comma-separated (e.g. `'Haifa'`, `'Haifa, Rehovot'`, `'Rishon LeZion Area'`). Resolved via `assets/unified_location_names.json`. If omitted, uses areas/cities from preferences. |
+| `--locations` | *(none)* | City/area to search (unified for Yad2 and Madlan). English or legacy names, comma-separated (e.g. `'Haifa'`, `'Haifa, Rehovot'`, `'Rishon LeZion Area'`). Resolved via `assets/unified_location_names.json`; unknown tokens are also matched against **`assets/yad2_area_IDs.json`** area names (e.g. `'Haifa Area'` or `'Haifa_Area'`). If omitted, uses areas/cities from preferences. |
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 
@@ -228,7 +228,7 @@ python madlan_pipeline.py --output-dir output_madlan --max-pages 4 --headless 1
 - **locations** — List of location names (e.g. `["חיפה"]` or `["חיפה", "רחובות"]`). Mapped to URL slugs via `assets/madlan_config.json`.
 - **price_min**, **price_max**, **rooms_min**, **rooms_max**, **max_floor**, **min_square_meters** — Same meaning as URL filters (price 1.9M–2.5M, 4–6 rooms, etc.).
 - **property_condition** — e.g. `["toRenovated", "preserved"]` (משופצת, שמורה).
-- **seller_type** — `"private"` or **`"agency"`** (תיווך). On Madlan this is **part of the filter string** (same segment as price/rooms), not only inferred from cards — unlike Yad2, the search URL encodes seller directly (e.g. `..._toRenovated,preserved_private____...`).
+- **private_only_madlan** (boolean) — Same idea as Yad2’s **private_only**: `true` = only private sellers (URL filter `_private_`), `false` = both private and agency (no seller filter). Backward compatible with legacy **seller_type** (`"private"` / `"agency"`).
 - **trust_url_seller_filter** (default `true`) — If true, the search page does not skip cards by broker heuristics; the URL filter already restricts private vs agency.
 - **use_israel_bbox** + **bbox** — Set `use_israel_bbox: true` and optionally `bbox: [west, south, east, north]` for map-style country search: `/for-sale/ישראל?bbox=...&filters=...` (same filters; see [example](https://www.madlan.co.il/for-sale/%D7%99%D7%A9%D7%A8%D7%90%D7%9C?bbox=33.29348%2C29.48782%2C36.86953%2C33.33522&filters=...)).
 - **exclude_cities** — Cities to skip (extra effort on avoid lists).
