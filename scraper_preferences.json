@@ -20,7 +20,7 @@
     "rooms_min": 4,
     "rooms_max": 6,
     "property_condition": ["toRenovated", "preserved"],
-    "seller_type": "private",
+    "private_only_madlan": false,
     "max_floor": 4,
     "min_square_meters": 90,
     "publication_max_months": 3,
