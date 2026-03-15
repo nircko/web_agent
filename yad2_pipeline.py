@@ -305,6 +305,7 @@ class RunSummary:
     total_listings_filtered_by_date: int = 0
     total_listings_filtered_by_floor: int = 0
     total_listings_filtered_by_city: int = 0
+    total_listings_filtered_by_neighborhood: int = 0
     total_listings_filtered_by_broker: int = 0
     total_exported_rows: int = 0
     total_partial_rows: int = 0
