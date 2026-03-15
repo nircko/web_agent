@@ -825,22 +825,10 @@ class Yad2Scraper:
         return re.sub(r"\s+", " ", (text or "")).strip()
 
     def _parse_float(self, text: Optional[str]) -> Optional[float]:
-        if not text:
-            return None
-        try:
-            cleaned = re.sub(r"[^\d\.]", "", text.replace(",", ""))
-            return float(cleaned) if cleaned else None
-        except Exception:
-            return None
+        return parse_float(text)
 
     def _parse_int(self, text: Optional[str]) -> Optional[int]:
-        if not text:
-            return None
-        try:
-            cleaned = re.sub(r"[^\d]", "", text)
-            return int(cleaned) if cleaned else None
-        except Exception:
-            return None
+        return parse_int(text)
 
     def _extract_publication_date(self, soup: BeautifulSoup, full_text: str) -> Tuple[Optional[str], Optional[str]]:
         """
