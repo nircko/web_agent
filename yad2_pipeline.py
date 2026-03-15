@@ -9,7 +9,7 @@ import sys
 import warnings
 import time
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 
@@ -137,6 +137,86 @@ def _fix_hebrew_encoding(text: Any) -> Any:
             return text
 
 
+# Excel export: column order and formatting (unified with Madlan)
+EXCEL_COLUMN_ORDER = [
+    "yad2_listing_id",
+    "title",
+    "city",
+    "street_address_raw",
+    "neighborhood",
+    "publication_date_raw",
+    "transaction_type",
+    "price_ils",
+    "currency",
+    "rooms",
+    "floor_current",
+    "description_clean",
+    "entry_date",
+    "balcony_count",
+    "parking_count",
+    "elevator",
+    "mamad",
+    "storage",
+    "extra_features",
+    "region",
+    "full_address_best",
+    "latitude",
+    "longitude",
+    "drive_to_tel_aviv_savidor_duration_min",
+    "drive_to_tel_aviv_savidor_distance_km",
+    "drive_to_beer_sheva_center_duration_min",
+    "drive_to_beer_sheva_center_distance_km",
+    "image_count_detected",
+    "image_count_downloaded",
+    "image_folder_path",
+    "image_file_names",
+    "property_summary",
+    "commute_assessment",
+    "extraction_confidence_score",
+    "filtered_search_url",
+    "search_page_number",
+    "scrape_timestamp_utc",
+    "publication_date_iso",
+    "seller_name",
+    "seller_type",
+    "seller_phone_raw",
+]
+EXCEL_HEADER_RENAMES = {"street_address_raw": "address", "neighborhood": "Neighborhood"}
+EXCEL_DATE_COLUMNS = {"publication_date_raw", "publication_date_iso", "entry_date", "scrape_timestamp_utc"}
+EXCEL_PHONE_COLUMNS = {"seller_phone_raw", "seller_phone_normalized"}
+EXCEL_INT_COLUMNS = {
+    "search_page_number", "floor_current", "balcony_count", "parking_count",
+    "image_count_detected", "image_count_downloaded",
+}
+EXCEL_FLOAT_COLUMNS = {
+    "price_ils", "rooms", "latitude", "longitude",
+    "drive_to_tel_aviv_savidor_duration_min", "drive_to_tel_aviv_savidor_distance_km",
+    "drive_to_beer_sheva_center_duration_min", "drive_to_beer_sheva_center_distance_km",
+    "extraction_confidence_score", "floor_total", "built_sqm", "price_per_sqm",
+}
+
+
+def _normalize_year_in_date_string(val: Any) -> Optional[str]:
+    """Convert 2-digit year to 4-digit (25 -> 2025, 26 -> 2026). Return ISO-like or original string."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    # dd/mm/yy or dd-mm-yy or yyyy-mm-dd
+    m = re.match(r"(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})", s)
+    if m:
+        d, mon, y = m.group(1), m.group(2), m.group(3)
+        if len(y) == 2:
+            yi = int(y)
+            y = str(2000 + yi) if yi < 100 else str(1900 + yi)
+        return f"{y}-{int(mon):02d}-{int(d):02d}"
+    # yyyy-mm-dd
+    if re.match(r"\d{4}-\d{2}-\d{2}", s):
+        return s[:10]
+    return s
+
+
 def _process_file_decode(input_path: Union[str, Path], output_path: Union[str, Path]) -> None:
     """Read CSV (with chardet), apply Hebrew encoding fix, write Windows-compatible Excel (.xlsx)."""
     input_path = Path(input_path)
@@ -157,6 +237,87 @@ def _process_file_decode(input_path: Union[str, Path], output_path: Union[str, P
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_fixed.to_excel(output_path, index=False, engine="openpyxl")
     logging.info("Fixed Hebrew file saved to: %s", output_path)
+
+
+def _export_listings_to_formatted_excel(
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    fix_hebrew_fn=None,
+) -> None:
+    """
+    Read CSV, fix encoding, reorder columns, format cells (dates, phone as text, numbers), write Excel.
+    Uses openpyxl for number/date formats. Date strings with 2-digit year (25) become 2025.
+    """
+    import openpyxl
+    from openpyxl.utils.dataframe import dataframe_to_rows
+
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    fix_hebrew_fn = fix_hebrew_fn or _fix_hebrew_encoding
+
+    with open(input_path, "rb") as f:
+        result = chardet.detect(f.read(10000))
+        enc = result.get("encoding") or "utf-8"
+    df = pd.read_csv(input_path, encoding=enc)
+    df = df.map(fix_hebrew_fn)
+
+    # Reorder: only existing columns, then append any extra
+    order = [c for c in EXCEL_COLUMN_ORDER if c in df.columns]
+    extra = [c for c in df.columns if c not in order]
+    df = df[order + extra]
+
+    # Normalize date columns: 2-digit year -> 4-digit
+    for col in EXCEL_DATE_COLUMNS:
+        if col in df.columns:
+            df[col] = df[col].apply(_normalize_year_in_date_string)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    if ws is None:
+        raise RuntimeError("No active sheet")
+    ws.title = "Listings"
+
+    # Headers with renames
+    headers = [EXCEL_HEADER_RENAMES.get(c, c) for c in df.columns]
+    for col_idx, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col_idx, value=h)
+
+    # Data rows and set number format per column
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=False), 2):
+        for c_idx, value in enumerate(row, 1):
+            if value is not None and isinstance(value, float) and pd.isna(value):
+                value = None
+            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            col_name = df.columns[c_idx - 1]
+            if col_name in EXCEL_PHONE_COLUMNS:
+                cell.number_format = "@"
+                if value is not None and not isinstance(value, str):
+                    cell.value = str(int(value)) if isinstance(value, (int, float)) and not pd.isna(value) else value
+            elif col_name in EXCEL_DATE_COLUMNS and value:
+                cell.number_format = "YYYY-MM-DD"
+                # Convert ISO string to date for proper Excel date type
+                s = str(value).strip()
+                if re.match(r"\d{4}-\d{2}-\d{2}", s):
+                    try:
+                        cell.value = date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+                    except (ValueError, IndexError):
+                        pass
+            elif col_name in EXCEL_INT_COLUMNS and value is not None and str(value).replace(".", "").replace("-", "").isdigit():
+                try:
+                    cell.value = int(float(value))
+                    cell.number_format = "0"
+                except (ValueError, TypeError):
+                    pass
+            elif col_name in EXCEL_FLOAT_COLUMNS and value is not None:
+                try:
+                    cell.value = float(value)
+                    cell.number_format = "0.00"
+                except (ValueError, TypeError):
+                    pass
+
+    wb.save(output_path)
+    logging.info("Formatted Excel saved to: %s", output_path)
 
 
 def _is_broker_card(card_text: str) -> bool:
@@ -443,9 +604,12 @@ class Yad2Scraper:
         headless: bool = True,
         cities_to_skip: Optional[List[str]] = None,
         areas: Optional[List[str]] = None,
+        cities: Optional[List[str]] = None,
         filter_preferences: Optional[Dict[str, Any]] = None,
+        export_slug: Optional[str] = None,
     ):
         self.output_dir = output_dir
+        self.export_slug = (export_slug or "").strip() or None
         self.images_dir = output_dir / "images"
         self.debug_dir = output_dir / "debug"
         self.logs_dir = output_dir / "logs"
@@ -487,9 +651,9 @@ class Yad2Scraper:
         default_district = str(prefs.get("district") or "Center and Sharon").strip()
         pref_areas = prefs.get("areas") or []
         pref_cities = prefs.get("cities") or []
-        # CLI or explicit `areas` overrides preferences.areas
+        # CLI or explicit `areas`/`cities` override preferences
         areas_for_grouping = areas if areas else [a for a in pref_areas if str(a).strip()]
-        cities_for_grouping = [c for c in pref_cities if c and str(c).strip()]
+        cities_for_grouping = cities if cities is not None else [c for c in pref_cities if c and str(c).strip()]
 
         # Deduce district(s) from areas/cities; group by district so each URL is valid for Yad2
         self.search_groups: List[Tuple[str, List[str], List[str]]] = group_areas_and_cities_by_district(
@@ -1481,15 +1645,16 @@ class Yad2Scraper:
         )
 
     def _export_fixed_hebrew_xlsx(self) -> None:
-        """Create a Windows-compatible fixed_hebrew_file.xlsx in the output folder from listings_full.csv."""
+        """Create formatted Excel (column order, date/phone/number formats) from listings_full.csv. Filename: {export_slug}.xlsx or fixed_hebrew_file.xlsx."""
         if not self.output_csv.exists():
-            logging.info("No CSV file to export; skipping fixed_hebrew_file.xlsx.")
+            logging.info("No CSV file to export; skipping Excel.")
             return
+        base = self.export_slug if self.export_slug else "fixed_hebrew_file"
+        out_xlsx = self.output_dir / f"{base}.xlsx"
         try:
-            out_xlsx = self.output_dir / "fixed_hebrew_file.xlsx"
-            _process_file_decode(self.output_csv, out_xlsx)
+            _export_listings_to_formatted_excel(self.output_csv, out_xlsx)
         except Exception as e:
-            logging.warning("Failed to create fixed_hebrew_file.xlsx: %s", e)
+            logging.warning("Failed to create Excel %s: %s", out_xlsx, e)
 
     def _process_listing(
         self,
@@ -1622,14 +1787,13 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--areas",
+        "--locations",
         type=str,
         default="",
         help=(
-            "Comma-separated list of Yad2 'area' names (as in assets/yad2_area_IDs.json, "
-            "under the 'area' key) to iterate over. Example: "
-            "--areas 'Rishon LeZion Area, Netanya Area'. If omitted, the scraper will "
-            "search only by big_area (Center and Sharon) without a multiArea filter."
+            "City/area to search (unified for Yad2 and Madlan). English or legacy names, comma-separated. "
+            "Examples: --locations 'Haifa', --locations 'Haifa, Rehovot', --locations 'Rishon LeZion Area'. "
+            "Resolved via assets/unified_location_names.json. If omitted, uses areas/cities from preferences."
         ),
     )
     args = parser.parse_args()
@@ -1639,13 +1803,24 @@ def main() -> None:
     # Interpret headless flag: 1 => True (no UI, default), 0 => False (visible window).
     headless_bool = bool(args.headless)
 
-    # Parse areas from comma-separated CLI argument into a list of area names.
-    areas_list: List[str] = []
-    if args.areas:
-        for part in args.areas.split(","):
-            name = part.strip()
-            if name:
-                areas_list.append(name)
+    # Resolve --locations to Yad2 areas/cities and export slug (for Excel filename). Empty => use preferences only.
+    areas_override: Optional[List[str]] = None
+    cities_override: Optional[List[str]] = None
+    export_slug: Optional[str] = None
+    if args.locations and args.locations.strip():
+        try:
+            from unified_locations import resolve_locations_to_yad2
+            areas_override, cities_override, export_slug = resolve_locations_to_yad2(args.locations.strip())
+            if not areas_override and not cities_override:
+                logging.warning("No locations resolved from %r; using preferences.", args.locations)
+                areas_override = None
+                cities_override = None
+                export_slug = None
+        except Exception as e:
+            logging.warning("Unified locations resolution failed: %s; using preferences.", e)
+            areas_override = None
+            cities_override = None
+            export_slug = None
 
     geocoding_email = os.getenv("GEOCODING_EMAIL", "example@example.com")
     geocoder = Geocoder(email=geocoding_email)
@@ -1673,10 +1848,7 @@ def main() -> None:
         except Exception as e:
             logging.warning(f"Failed to load cities_to_skip from {config_path}: {e}")
 
-    # Filter preferences: config/filter_preferences.json (url_filters + post_filters; cities max 3)
     filter_prefs = load_filter_preferences()
-    # CLI --areas overrides filter_preferences.areas when provided
-    areas_override = areas_list if areas_list else None
 
     scraper = Yad2Scraper(
         output_dir=output_dir,
@@ -1687,7 +1859,9 @@ def main() -> None:
         headless=headless_bool,
         cities_to_skip=cities_to_skip_legacy,
         areas=areas_override,
+        cities=cities_override,
         filter_preferences=filter_prefs,
+        export_slug=export_slug,
     )
     scraper.scrape()
 
