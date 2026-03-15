@@ -658,7 +658,7 @@ class Yad2Scraper:
         # search_groups computed below after loading mappings
 
         # Load canonical Yad2 mappings (district / area / city) from assets first (needed for grouping)
-        mappings_path = Path("assets") / "yad2_area_IDs.json"
+        mappings_path = Path(__file__).resolve().parent / "assets" / "yad2_area_IDs.json"
         self.yad2_mappings = load_mappings(mappings_path)
 
         # District from preferences is only used when both areas and cities are empty; otherwise we always deduce from the lists

@@ -7,7 +7,6 @@
     "North and Valleys": "north-and-valleys",
     "South": "south"
   },
-
   "area_to_district": {
     "Tel Aviv Area": "Tel Aviv and surroundings",
     "Ramat Gan & Givatayim Area": "Tel Aviv and surroundings",
@@ -27,7 +26,6 @@
     "Zikhron Ya'akov & Hof HaCarmel Area": "Northern Coastal Plain",
     "Lower Galilee Area": "North and Valleys"
   },
-
   "city_to_district": {
     "Atlit": "Northern Coastal Plain",
     "Ra'anana": "Center and Sharon",
@@ -62,9 +60,9 @@
     "Kfar Saba": "Center and Sharon",
     "Be'er Sheva": "South",
     "Beit Shemesh": "Jerusalem and surroundings",
-    "Zikhron Ya'akov": "Northern Coastal Plain"
+    "Zikhron Ya'akov": "Northern Coastal Plain",
+    "Tirat HaCarmel": "Northern Coastal Plain"
   },
-
   "area": {
     "Tel Aviv Area": "1",
     "Ramat Gan & Givatayim Area": "2",
@@ -84,7 +82,6 @@
     "Zikhron Ya'akov & Hof HaCarmel Area": "67",
     "Lower Galilee Area": "74"
   },
-
   "city": {
     "Atlit": "0053",
     "Ra'anana": "0230",
@@ -119,6 +116,7 @@
     "Kfar Saba": "8900",
     "Be'er Sheva": "9000",
     "Beit Shemesh": "9100",
+    "Tirat HaCarmel": "2100",
     "Zikhron Ya'akov": "9300"
   }
 }

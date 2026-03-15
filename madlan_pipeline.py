@@ -95,6 +95,8 @@ def _default_madlan_preferences() -> Dict[str, Any]:
         "exclude_neighborhoods": [],
         "private_only": False,
         "captcha_avoidance_min": 0.0,
+        "listing_open_delay_sec": 2.0,
+        "captcha_solve_wait_sec": 5,
         "trust_url_seller_filter": True,
         "use_israel_bbox": False,
         "bbox": [33.29348, 29.48782, 36.86953, 33.33522],
@@ -151,6 +153,8 @@ class MadlanScraper:
         self.private_only = self.private_only_madlan
         self.trust_url_seller_filter = bool(prefs.get("trust_url_seller_filter", True))
         self.captcha_avoidance_min = max(0.0, float(prefs.get("captcha_avoidance_min", 0)))
+        self.listing_open_delay_sec = max(0.0, float(prefs.get("listing_open_delay_sec", 2.0)))
+        self.captcha_solve_wait_sec = max(2, int(prefs.get("captcha_solve_wait_sec", 5)))
         self.madlan_config = load_madlan_config()
 
         self._setup_dirs()
@@ -193,6 +197,7 @@ class MadlanScraper:
 
     def _wait_for_captcha_solved(self, page: Page, context: str) -> None:
         """If the page shows ShieldSquare/captcha and we're not headless, wait for user to solve it (same as Yad2)."""
+        wait_ms = self.captcha_solve_wait_sec * 1000
         while True:
             try:
                 title = page.title() or ""
@@ -207,9 +212,14 @@ class MadlanScraper:
                     context,
                 )
                 break
-            logging.info("Captcha/ShieldSquare detected on %s. Solve in browser, then press Enter.", context)
+            logging.info(
+                "Captcha/ShieldSquare detected on %s. You have time to solve it in the browser; "
+                "then press Enter here to continue (waiting %s s after).",
+                context,
+                self.captcha_solve_wait_sec,
+            )
             input("Press Enter when the real page is visible to continue... ")
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(wait_ms)
         return
 
     def _normalize_phone(self, raw: str) -> str:
@@ -235,6 +245,8 @@ class MadlanScraper:
         t.add_row("Exclude neighborhoods", ", ".join(self.neighborhoods_to_skip) or "(none)")
         t.add_row("Last publication month", str(self._prefs.get("last_publication_month", self._prefs.get("publication_max_months", 3))))
         t.add_row("Max building floors", str(self.max_floor_total))
+        t.add_row("Listing open delay (sec)", str(self.listing_open_delay_sec))
+        t.add_row("Captcha solve wait (sec)", str(self.captcha_solve_wait_sec))
         t.add_row("Private only (detail)", str(self.private_only))
         t.add_row("Trust URL seller filter", str(self.trust_url_seller_filter))
         console.print(Panel(t, title="[bold cyan] Madlan input filters [/]", border_style="cyan"))
@@ -328,7 +340,9 @@ class MadlanScraper:
             listing_links.append((listing_id, href))
 
         self.run_summary.total_unique_listings_found = len(self.seen_listing_ids)
-        for listing_id, listing_url in listing_links:
+        for i, (listing_id, listing_url) in enumerate(listing_links):
+            if i > 0 and self.listing_open_delay_sec > 0:
+                time.sleep(self.listing_open_delay_sec)
             self._process_listing(browser, page_number, url, listing_id, listing_url)
         page.close()
 
@@ -347,7 +361,7 @@ class MadlanScraper:
             page.goto(listing_url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
             self._wait_for_captcha_solved(page, f"listing {listing_id}")
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(self.captcha_solve_wait_sec * 1000)
             record = self._extract_from_listing_page(
                 page, listing_id, listing_url, filtered_search_url, search_page_number
             )
