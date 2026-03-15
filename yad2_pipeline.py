@@ -247,6 +247,15 @@ class ListingRecord(BaseModel):
     mamad: Optional[bool] = None
     storage: Optional[bool] = None
     extra_features: Optional[str] = None
+    # Extended technical (Madlan SSR / shared)
+    year_built: Optional[int] = None
+    assumed_design_range: Optional[str] = None
+    air_conditioning: Optional[bool] = None
+    solar_water_heater: Optional[bool] = None
+    window_bars: Optional[bool] = None
+    investment_transit_notes: Optional[str] = None
+    investment_nuisance_notes: Optional[str] = None
+    property_technical_profile_en: Optional[str] = None
 
     # Location
     street_address_raw: Optional[str] = None
