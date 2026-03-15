@@ -206,6 +206,7 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 - **publication_max_months** — Drop listings older than this many months.
 - **max_building_floors** — Skip listings in buildings with more floors than this.
 - **exclude_cities** — City names to exclude after parsing.
+- **exclude_neighborhoods** — Neighborhood names to exclude (used by Madlan pipeline; can be added to Yad2 post-filters later).
 - **private_only** — If `true`, only private (non‑agency) listings are exported. The scraper skips cards that show "תיווך"/"מתווך" on the search page and skips persisting any listing whose seller type is broker after opening the page. Set to `true` if you were seeing only real estate agencies (״תיווך״/״מתווך״) and want פרטי (private) publishers only.
 
 **Why were all results from agencies?** By default the scraper does not filter by seller type; Yad2 often shows agency listings first. Enable **private_only** in `scraper_preferences.json` to export only private (non‑broker) listings.
