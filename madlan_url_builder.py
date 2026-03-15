@@ -62,22 +62,23 @@ def build_madlan_for_sale_url(
     rooms_min: int = 4,
     rooms_max: int = 6,
     property_condition: Optional[List[str]] = None,
-    seller_type: str = "private",
+    seller_type: Optional[str] = "private",
     max_floor: int = 4,
     min_sqm: int = 90,
     vaad_max: int = 100000,
     page: Optional[int] = None,
     tracking_source: str = "filter_apply",
 ) -> str:
-    """Build a full Madlan for-sale search URL. seller_type: 'private' or 'agency'."""
+    """Build a full Madlan for-sale search URL. seller_type: 'private', 'agency', or None for both."""
     if not location_slugs:
         location_slugs = "חיפה-ישראל"
     condition_str = ",".join(property_condition or ["toRenovated", "preserved"])
+    seller_segment = f"_{seller_type}" if seller_type else "_"
     filter_parts = [
         f"_{price_min}-{price_max}",
         f"_{rooms_min}-{rooms_max}",
         f"_{condition_str}",
-        f"_{seller_type}",
+        seller_segment,
         "____",
         f"-{max_floor}",
         f"_{min_sqm}-",
@@ -105,21 +106,22 @@ def build_madlan_for_sale_url_israel_bbox(
     rooms_min: int = 4,
     rooms_max: int = 6,
     property_condition: Optional[List[str]] = None,
-    seller_type: str = "private",
+    seller_type: Optional[str] = "private",
     max_floor: int = 4,
     min_sqm: int = 90,
     vaad_max: int = 100000,
     page: Optional[int] = None,
     tracking_source: str = "map",
 ) -> str:
-    """Country-wide map search: /for-sale/ישראל?bbox=...&filters=... Seller is in filters."""
+    """Country-wide map search: /for-sale/ישראל?bbox=...&filters=... Seller is in filters. seller_type None = both."""
     israel_slug = quote("ישראל", safe="")
     condition_str = ",".join(property_condition or ["toRenovated", "preserved"])
+    seller_segment = f"_{seller_type}" if seller_type else "_"
     filter_parts = [
         f"_{price_min}-{price_max}",
         f"_{rooms_min}-{rooms_max}",
         f"_{condition_str}",
-        f"_{seller_type}",
+        seller_segment,
         "____",
         f"-{max_floor}",
         f"_{min_sqm}-",
@@ -167,9 +169,17 @@ def build_madlan_url_from_preferences(
         cond_list = [condition_map.get(str(c), str(c)) for c in cond_raw]
     else:
         cond_list = ["toRenovated", "preserved"]
-    seller_map = config.get("seller_type_values") or {}
-    seller = seller_type or uf.get("seller_type") or "private"
-    seller = seller_map.get(seller, seller) if isinstance(seller_map, dict) else seller
+    # Derive seller from private_only_madlan (same idea as Yad2 private_only). Backward compat: seller_type.
+    if "private_only_madlan" in uf:
+        private_only_madlan = bool(uf.get("private_only_madlan"))
+    else:
+        private_only_madlan = (uf.get("seller_type") or "private") == "private"
+    seller: Optional[str] = "private" if private_only_madlan else None
+    if seller_type is not None:
+        seller = seller_type
+    if seller is not None:
+        seller_map = config.get("seller_type_values") or {}
+        seller = seller_map.get(seller, seller) if isinstance(seller_map, dict) else seller
 
     # Israel + bbox (map): preferences use_israel_bbox + bbox
     use_bbox = bool(uf.get("use_israel_bbox") or uf.get("map_israel_wide"))
