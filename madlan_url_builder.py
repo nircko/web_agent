@@ -5,13 +5,15 @@ URL shape: https://www.madlan.co.il/for-sale/{location_slugs}?filters={filter_st
 
 Filter string (underscore-separated segments):
   _priceMin-priceMax_roomsMin-roomsMax_condition_sellerType____-maxFloor_minSqm-__0-100000_______search-filter-top-marketplace
+
+Seller (private/agency) is part of the filter string, unlike Yad2. Map search: /for-sale/ישראל?bbox=...
 """
 
 import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,51 @@ def build_madlan_for_sale_url(
     if page is not None and page > 1:
         params.append(f"page={page}")
     return f"{MADLAN_BASE}{path}?{'&'.join(params)}"
+
+
+def build_madlan_for_sale_url_israel_bbox(
+    bbox_west: float,
+    bbox_south: float,
+    bbox_east: float,
+    bbox_north: float,
+    price_min: int = 1900000,
+    price_max: int = 2500000,
+    rooms_min: int = 4,
+    rooms_max: int = 6,
+    property_condition: Optional[List[str]] = None,
+    seller_type: str = "private",
+    max_floor: int = 4,
+    min_sqm: int = 90,
+    vaad_max: int = 100000,
+    page: Optional[int] = None,
+    tracking_source: str = "map",
+) -> str:
+    """Country-wide map search: /for-sale/ישראל?bbox=...&filters=... Seller is in filters."""
+    israel_slug = quote("ישראל", safe="")
+    condition_str = ",".join(property_condition or ["toRenovated", "preserved"])
+    filter_parts = [
+        f"_{price_min}-{price_max}",
+        f"_{rooms_min}-{rooms_max}",
+        f"_{condition_str}",
+        f"_{seller_type}",
+        "____",
+        f"-{max_floor}",
+        f"_{min_sqm}-",
+        "_",
+        f"0-{vaad_max}",
+        "_______",
+        "search-filter-top-marketplace",
+    ]
+    filter_string = "".join(filter_parts)
+    bbox = f"{bbox_west},{bbox_south},{bbox_east},{bbox_north}"
+    q = [
+        ("bbox", bbox),
+        ("filters", filter_string),
+        ("tracking_search_source", tracking_source),
+    ]
+    if page is not None and page > 1:
+        q.append(("page", str(page)))
+    return f"{MADLAN_BASE}{MADLAN_FOR_SALE}/{israel_slug}?{urlencode(q)}"
 
 
 def build_madlan_url_from_preferences(
