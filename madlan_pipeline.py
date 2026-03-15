@@ -85,7 +85,7 @@ def _default_madlan_preferences() -> Dict[str, Any]:
         "rooms_min": 4,
         "rooms_max": 6,
         "property_condition": ["toRenovated", "preserved"],
-        "seller_type": "private",
+        "private_only_madlan": False,
         "max_floor": 4,
         "min_square_meters": 90,
         "publication_max_months": 3,
@@ -94,7 +94,6 @@ def _default_madlan_preferences() -> Dict[str, Any]:
         "exclude_neighborhoods": [],
         "private_only": False,
         "captcha_avoidance_min": 0.0,
-        # Madlan: seller (private/agency) is in URL filters — no need to drop cards by broker text
         "trust_url_seller_filter": True,
         "use_israel_bbox": False,
         "bbox": [33.29348, 29.48782, 36.86953, 33.33522],
@@ -144,7 +143,11 @@ class MadlanScraper:
 
         self.publication_cutoff_days = int((prefs.get("publication_max_months") or 3) * 30)
         self.max_floor_total = int(prefs.get("max_building_floors") or 7)
-        self.private_only = bool(prefs.get("private_only", False))
+        if "private_only_madlan" in prefs:
+            self.private_only_madlan = bool(prefs.get("private_only_madlan"))
+        else:
+            self.private_only_madlan = (prefs.get("seller_type") or "private") == "private"
+        self.private_only = self.private_only_madlan
         self.trust_url_seller_filter = bool(prefs.get("trust_url_seller_filter", True))
         self.captcha_avoidance_min = max(0.0, float(prefs.get("captcha_avoidance_min", 0)))
         self.madlan_config = load_madlan_config()
@@ -181,7 +184,6 @@ class MadlanScraper:
             rooms_min=self._prefs.get("rooms_min"),
             rooms_max=self._prefs.get("rooms_max"),
             property_condition=self._prefs.get("property_condition"),
-            seller_type=self._prefs.get("seller_type"),
             max_floor=self._prefs.get("max_floor"),
             min_sqm=self._prefs.get("min_square_meters"),
             page=page if page > 1 else None,
@@ -227,7 +229,7 @@ class MadlanScraper:
         t.add_row("Locations", ", ".join(self._prefs.get("locations") or []))
         t.add_row("Price", f"{self._prefs.get('price_min')} – {self._prefs.get('price_max')} ILS")
         t.add_row("Rooms", f"{self._prefs.get('rooms_min')} – {self._prefs.get('rooms_max')}")
-        t.add_row("Seller type", str(self._prefs.get("seller_type", "private")))
+        t.add_row("Private only (Madlan)", str(self.private_only_madlan))
         t.add_row("Exclude cities", ", ".join(self.cities_to_skip) or "(none)")
         t.add_row("Exclude neighborhoods", ", ".join(self.neighborhoods_to_skip) or "(none)")
         t.add_row("Publication ≤ months", str(self._prefs.get("publication_max_months", 3)))
