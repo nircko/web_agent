@@ -160,7 +160,38 @@ python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" -
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 
-### 4. Preferences (`scraper_preferences.json`)
+### 4. Summary PowerPoint
+
+The pipeline saves **debug PNG and HTML only for listings that pass all filters** and are written to `listings_full.csv`. You can then generate a summary PowerPoint from an output directory.
+
+**Generate the summary deck:**
+
+```bash
+# From project root (Mac/Linux)
+source .venv/bin/activate
+python scripts/build_summary_pptx.py --output-dir output
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/build_summary_pptx.py --output-dir output
+```
+
+Optional: `--out-pptx path/to/summary.pptx` (default: `<output-dir>/summary_listings.pptx`).
+
+**Each slide contains:**
+
+- **Title:** city + address + price  
+- **Subtitle:** original listing URL  
+- **Right:** debug screenshot (listing page PNG)  
+- **Left upper:** listing images + description text  
+- **Left bottom:** floor, parking, transportation (drive times), property status  
+
+Requires `listings_full.csv`, and optionally `output/debug/` (PNG per exported listing) and `output/images/<listing_id>/` (downloaded images).
+
+### 5. Preferences (`scraper_preferences.json`)
 
 The scraper loads preferences from **`scraper_preferences.json`** in the project root. You can also use `config/filter_preferences.json` (nested format); the loader falls back to it if the root file is missing.
 
