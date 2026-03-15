@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+from bs4 import BeautifulSoup
 
 
 def parse_float(text: Optional[str]) -> Optional[float]:
@@ -103,4 +105,70 @@ def deep_find_poi_ssr(ctx: Dict[str, Any]) -> Dict[str, Any]:
             out.update(as_["poi"])
     except Exception:
         pass
+    return out
+
+
+def extract_assumed_design_range(ctx: Dict[str, Any], html: str) -> Optional[str]:
+    """assumedDesignRange in SSR or similar; else scan HTML."""
+    if isinstance(ctx, dict):
+
+        def find_key(d: Any, key: str) -> Any:
+            if isinstance(d, dict):
+                if key in d:
+                    return d[key]
+                for v in d.values():
+                    r = find_key(v, key)
+                    if r is not None:
+                        return r
+            elif isinstance(d, list):
+                for x in d:
+                    r = find_key(x, key)
+                    if r is not None:
+                        return r
+            return None
+
+        v = find_key(ctx, "assumedDesignRange")
+        if v is not None:
+            return str(v)
+    m = re.search(r"assumedDesignRange[\"']?\s*:\s*[\"']([^\"']+)", html)
+    if m:
+        return m.group(1)
+    return None
+
+
+def extract_breadcrumb_items(soup: BeautifulSoup) -> List[str]:
+    """BreadcrumbList itemListElement -> names for building scale heuristics."""
+    names: List[str] = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw = script.string or script.get_text() or ""
+        if not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        items = _ld_breadcrumb_items(data)
+        names.extend(items)
+    for nav in soup.find_all(["nav", "ol", "ul"], class_=re.compile("breadcrumb", re.I)):
+        for a in nav.find_all("a"):
+            t = (a.get_text() or "").strip()
+            if t and len(t) < 80:
+                names.append(t)
+    return list(dict.fromkeys(names))
+
+
+def _ld_breadcrumb_items(data: Any) -> List[str]:
+    out: List[str] = []
+    if isinstance(data, dict):
+        if data.get("@type") == "BreadcrumbList" and "itemListElement" in data:
+            for it in data.get("itemListElement") or []:
+                if isinstance(it, dict):
+                    name = it.get("name") or (it.get("item") or {}).get("name")
+                    if name:
+                        out.append(str(name))
+        for v in data.values():
+            out.extend(_ld_breadcrumb_items(v))
+    elif isinstance(data, list):
+        for x in data:
+            out.extend(_ld_breadcrumb_items(x))
     return out
