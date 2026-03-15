@@ -171,6 +171,30 @@ def build_madlan_url_from_preferences(
     seller = seller_type or uf.get("seller_type") or "private"
     seller = seller_map.get(seller, seller) if isinstance(seller_map, dict) else seller
 
+    # Israel + bbox (map): preferences use_israel_bbox + bbox
+    use_bbox = bool(uf.get("use_israel_bbox") or uf.get("map_israel_wide"))
+    if use_bbox:
+        b = uf.get("bbox") or uf.get("map_bbox")
+        if isinstance(b, (list, tuple)) and len(b) >= 4:
+            w, s, e, n = float(b[0]), float(b[1]), float(b[2]), float(b[3])
+        else:
+            w, s, e, n = 33.29348, 29.48782, 36.86953, 33.33522
+        return build_madlan_for_sale_url_israel_bbox(
+            w,
+            s,
+            e,
+            n,
+            price_min=int(price_min or uf.get("price_min") or 1900000),
+            price_max=int(price_max or uf.get("price_max") or 2500000),
+            rooms_min=int(rooms_min or uf.get("rooms_min") or 4),
+            rooms_max=int(rooms_max or uf.get("rooms_max") or 6),
+            property_condition=cond_list,
+            seller_type=seller,
+            max_floor=int(max_floor or uf.get("max_floor") or 4),
+            min_sqm=int(min_sqm or uf.get("min_square_meters") or 90),
+            page=page,
+        )
+
     return build_madlan_for_sale_url(
         location_slugs=slug_str,
         price_min=int(price_min or uf.get("price_min") or uf.get("minPrice") or 1900000),
