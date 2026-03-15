@@ -31,7 +31,7 @@ from yad2_pipeline import (
     Geocoder,
     RouteCalculator,
     _fix_hebrew_encoding,
-    _process_file_decode,
+    _export_listings_to_formatted_excel,
     _classify_seller_type_from_text,
     _is_broker_card,
 )
@@ -112,8 +112,10 @@ class MadlanScraper:
         cities_to_skip: Optional[List[str]] = None,
         neighborhoods_to_skip: Optional[List[str]] = None,
         madlan_preferences: Optional[Dict[str, Any]] = None,
+        export_slug: Optional[str] = None,
     ):
         self.output_dir = Path(output_dir)
+        self.export_slug = (export_slug or "").strip() or None
         self.images_dir = self.output_dir / "images"
         self.debug_dir = self.output_dir / "debug"
         self.logs_dir = self.output_dir / "logs"
@@ -727,13 +729,15 @@ class MadlanScraper:
         record.image_folder_path = str(listing_img_dir)
 
     def _export_fixed_hebrew_xlsx(self) -> None:
+        """Same CSV→Excel as Yad2: column order, date/phone/number formats, filename from --locations (export_slug)."""
         if not self.output_csv.exists():
             return
+        base = self.export_slug if self.export_slug else "fixed_hebrew_file"
+        out_xlsx = self.output_dir / f"{base}.xlsx"
         try:
-            out_xlsx = self.output_dir / "fixed_hebrew_file.xlsx"
-            _process_file_decode(self.output_csv, out_xlsx)
+            _export_listings_to_formatted_excel(self.output_csv, out_xlsx)
         except Exception as e:
-            logging.warning("Failed to create fixed_hebrew_file.xlsx: %s", e)
+            logging.warning("Failed to create Excel %s: %s", out_xlsx, e)
 
 
 def main() -> None:
@@ -744,13 +748,35 @@ def main() -> None:
     parser.add_argument("--max-pages", type=int, default=4, help="Search pages to scrape")
     parser.add_argument("--headless", type=int, choices=[0, 1], default=1, help="1=headless, 0=visible")
     parser.add_argument("--captcha-avoidance-min", type=float, default=0, help="Minutes to sleep between search pages (same as Yad2)")
-    parser.add_argument("--locations", type=str, default="", help="Comma-separated location names (e.g. חיפה,רחובות)")
+    parser.add_argument(
+        "--locations",
+        type=str,
+        default="",
+        help=(
+            "City/area to search (unified with Yad2). English or Hebrew, comma-separated. "
+            "Examples: --locations 'Haifa', --locations 'Haifa, Rehovot', --locations 'חיפה'. "
+            "Resolved via assets/unified_location_names.json. Excel output named e.g. Haifa_Area.xlsx."
+        ),
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    locations_list = [x.strip() for x in args.locations.split(",") if x.strip()] if args.locations else None
-
     prefs = load_madlan_preferences()
+    export_slug: Optional[str] = None
+    locations_list: Optional[List[str]] = None
+    if args.locations:
+        try:
+            from unified_locations import resolve_locations_to_madlan
+            locations_list, export_slug = resolve_locations_to_madlan(args.locations)
+            if locations_list:
+                prefs["locations"] = locations_list
+        except Exception as e:
+            logging.warning("Unified locations resolution failed: %s; using --locations as literal.", e)
+            locations_list = [x.strip() for x in args.locations.split(",") if x.strip()]
+            if locations_list:
+                prefs["locations"] = locations_list
+    if not locations_list and args.locations:
+        locations_list = [x.strip() for x in args.locations.split(",") if x.strip()]
     if locations_list:
         prefs["locations"] = locations_list
     if args.captcha_avoidance_min is not None and args.captcha_avoidance_min > 0:
@@ -768,6 +794,7 @@ def main() -> None:
         max_pages=args.max_pages,
         headless=bool(args.headless),
         madlan_preferences=prefs,
+        export_slug=export_slug,
     )
     scraper.scrape()
     print("Done. CSV:", scraper.output_csv)
