@@ -22,6 +22,8 @@ from requests import RequestsDependencyWarning
 warnings.filterwarnings("ignore", category=RequestsDependencyWarning)
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+
+from listing_extract_common import parse_float, parse_int
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from playwright.sync_api import sync_playwright, Page, Browser
