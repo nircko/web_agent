@@ -213,6 +213,29 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 
 CLI `--areas` overrides the areas from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
 
+#### Madlan (madlan.co.il) scraper
+
+A separate pipeline scrapes **Madlan** with the same output shape (CSV, images, debug, fixed Hebrew XLSX). It uses the **`madlan`** section in `scraper_preferences.json` or a standalone **`madlan_preferences.json`**.
+
+**Run Madlan:**
+
+```bash
+python madlan_pipeline.py --output-dir output_madlan --max-pages 4 --headless 1
+```
+
+**Madlan preferences** (under `madlan` or in `madlan_preferences.json`):
+
+- **locations** — List of location names (e.g. `["חיפה"]` or `["חיפה", "רחובות"]`). Mapped to URL slugs via `assets/madlan_config.json`.
+- **price_min**, **price_max**, **rooms_min**, **rooms_max**, **max_floor**, **min_square_meters** — Same meaning as URL filters (price 1.9M–2.5M, 4–6 rooms, etc.).
+- **property_condition** — e.g. `["toRenovated", "preserved"]` (משופצת, שמורה).
+- **seller_type** — `"private"` or **`"agency"`** (תיווך). On Madlan this is **part of the filter string** (same segment as price/rooms), not only inferred from cards — unlike Yad2, the search URL encodes seller directly (e.g. `..._toRenovated,preserved_private____...`).
+- **trust_url_seller_filter** (default `true`) — If true, the search page does not skip cards by broker heuristics; the URL filter already restricts private vs agency.
+- **use_israel_bbox** + **bbox** — Set `use_israel_bbox: true` and optionally `bbox: [west, south, east, north]` for map-style country search: `/for-sale/ישראל?bbox=...&filters=...` (same filters; see [example](https://www.madlan.co.il/for-sale/%D7%99%D7%A9%D7%A8%D7%90%D7%9C?bbox=33.29348%2C29.48782%2C36.86953%2C33.33522&filters=...)).
+- **exclude_cities** — Cities to skip (extra effort on avoid lists).
+- **exclude_neighborhoods** — Neighborhoods to skip (e.g. `["כרמליה", "הדר"]`).
+
+The Madlan URL filter string is built from these (see [Madlan search URL](https://www.madlan.co.il/for-sale/חיפה-ישראל?filters=...)). You can add cities/areas in the path (e.g. `חיפה-ישראל,אזור-דרום-ישראל,רחובות-ישראל`). Listing pages enrich **`property_technical_profile_en`** (and related CSV columns) from `window.__SSR_HYDRATED_CONTEXT__` (e.g. `addressSearch.poi`: year/floor), schema.org `additionalProperty`, breadcrumbs / `assumedDesignRange`, and description keywords (transit / nuisances). Shared parsing lives in `listing_extract_common.py`; Yad2 reuses `parse_float` / `parse_int` from the same module. The summary PowerPoint and `fixed_hebrew_file.xlsx` work the same on `output_madlan/` as on `output/`.
+
 ### 6. Outputs
 
 - **CSV**: `output/listings_full.csv`
