@@ -1,5 +1,24 @@
 {
-  "comment": "Unified English location names for Yad2 and Madlan. Input args (e.g. --locations Haifa) resolve to platform-specific values. Aliases support Hebrew/spelling variants.",
+  "comment": "Unified English location names for Yad2 and Madlan. Input args (e.g. --locations Haifa) resolve to platform-specific values. Aliases support Hebrew/spelling variants. yad2_area_to_madlan_cities: when user passes a Yad2 area (e.g. Haifa Area), Madlan resolves it to this list of Hebrew city names to search.",
+  "yad2_area_to_madlan_cities": {
+    "Tel Aviv Area": ["תל אביב"],
+    "Ramat Gan & Givatayim Area": ["רמת גן", "גבעתיים"],
+    "Bnei Brak & Givat Shmuel Area": ["בני ברק", "גבעת שמואל"],
+    "Petah Tikva Area": ["פתח תקווה", "ראש העין"],
+    "Haifa Area": ["חיפה", "נשר"],
+    "Krayot Area": ["קרית אתא", "קרית מוצקין", "קרית ביאליק", "קרית ים"],
+    "Jerusalem Area": ["ירושלים", "מבשרת ציון"],
+    "Holon & Bat Yam Area": ["חולון", "בת ים"],
+    "Rishon LeZion Area": ["ראשון לציון"],
+    "Modiin Area": ["מודיעין", "מודיעין עילית"],
+    "Lod & Ramla Area": ["לוד", "רמלה"],
+    "Ness Ziona & Rehovot Area": ["רחובות", "נס ציונה"],
+    "Netanya Area": ["נתניה", "כפר יונה"],
+    "Ramat HaSharon & Herzliya Area": ["הרצליה", "רמת השרון"],
+    "Eilat & Arava Area": ["אילת"],
+    "Zikhron Ya'akov & Hof HaCarmel Area": ["זיכרון יעקב", "עתלית", "קיסריה"],
+    "Lower Galilee Area": ["נצרת", "נוף הגליל"]
+  },
   "locations": {
     "Haifa": {
       "yad2_area": "Haifa Area",

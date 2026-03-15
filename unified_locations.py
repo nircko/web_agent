@@ -21,11 +21,18 @@ _YAD2_AREA_CACHE: Optional[Dict[str, str]] = None
 
 
 def _load_yad2_area_ids(path: Optional[Path] = None) -> Dict[str, str]:
-    """Load yad2_area_IDs.json and return the 'area' dict (area name -> id). Cached."""
+    """Load yad2_area_IDs.json and return the 'area' dict (area name -> id). Cached when using default path."""
     global _YAD2_AREA_CACHE
+    p = path or _YAD2_AREA_IDS_PATH
+    if path is not None:
+        # Custom path: do not use cache (caller may use different path next time)
+        if not p.exists():
+            return {}
+        with p.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("area") or {}
     if _YAD2_AREA_CACHE is not None:
         return _YAD2_AREA_CACHE
-    p = path or _YAD2_AREA_IDS_PATH
     if not p.exists():
         return {}
     with p.open("r", encoding="utf-8") as f:
@@ -82,6 +89,8 @@ def _normalize_token(token: str, aliases: Dict[str, str], locations: Dict[str, A
 def resolve_locations_to_yad2(
     location_input: str,
     path: Optional[Path] = None,
+    *,
+    caller: str = "Yad2",
 ) -> Tuple[List[str], List[str], str]:
     """
     Resolve unified location string (e.g. "Haifa, Rehovot") to Yad2 areas and cities.
@@ -96,7 +105,12 @@ def resolve_locations_to_yad2(
     cities: List[str] = []
     slugs: List[str] = []
 
-    yad2_areas = _load_yad2_area_ids()
+    # Load Yad2 area names from same assets dir as unified_location_names when path is set
+    if path is not None and path.parent.exists():
+        yad2_path = path.parent / "yad2_area_IDs.json"
+        yad2_areas = _load_yad2_area_ids(yad2_path) if yad2_path.exists() else _load_yad2_area_ids()
+    else:
+        yad2_areas = _load_yad2_area_ids()
 
     for part in (location_input or "").split(","):
         canonical = _normalize_token(part, aliases, locations)
@@ -122,8 +136,18 @@ def resolve_locations_to_yad2(
                 slug = part_stripped.replace(" ", "_")
                 if slug not in slugs:
                     slugs.append(slug)
+                logger.info(
+                    "Resolved %r (%s) from assets/yad2_area_IDs.json as area %r.",
+                    part_stripped,
+                    caller,
+                    area_key,
+                )
             else:
-                logger.warning("Unknown location %r; add to assets/unified_location_names.json or use a Yad2 area name from assets/yad2_area_IDs.json", part_stripped)
+                logger.warning(
+                    "Unknown location %r (%s): not in assets/unified_location_names.json and not in assets/yad2_area_IDs.json 'area' list. Add it to unified_location_names.json (or its aliases) or use an area name from yad2_area_IDs.json.",
+                    part_stripped,
+                    caller,
+                )
 
     export_slug = "_".join(slugs) if slugs else "listings"
     return areas, cities, export_slug
@@ -132,9 +156,14 @@ def resolve_locations_to_yad2(
 def resolve_locations_to_madlan(
     location_input: str,
     path: Optional[Path] = None,
+    *,
+    caller: str = "Madlan",
 ) -> Tuple[List[str], str]:
     """
     Resolve unified location string to Madlan Hebrew locations and export slug.
+    When a token is a Yad2 area name (e.g. "Haifa Area" or "Haifa_Area"), resolve it to
+    the list of Madlan cities for that area via yad2_area_to_madlan_cities (Madlan has no
+    area concept, only cities).
 
     Returns:
         (madlan_locations, export_slug)
@@ -142,25 +171,59 @@ def resolve_locations_to_madlan(
     data = load_unified_locations(path)
     locations = data.get("locations") or {}
     aliases = data.get("aliases") or {}
+    area_to_madlan_cities: Dict[str, List[str]] = data.get("yad2_area_to_madlan_cities") or {}
     madlan_list: List[str] = []
     slugs: List[str] = []
 
+    # Load Yad2 area names for area fallback (same path logic as Yad2 resolver)
+    if path is not None and path.parent.exists():
+        yad2_path = path.parent / "yad2_area_IDs.json"
+        yad2_areas = _load_yad2_area_ids(yad2_path) if yad2_path.exists() else _load_yad2_area_ids()
+    else:
+        yad2_areas = _load_yad2_area_ids()
+
     for part in (location_input or "").split(","):
         canonical = _normalize_token(part, aliases, locations)
-        if not canonical or canonical not in locations:
-            # Pass through as-is (might be Hebrew or existing slug)
-            raw = part.strip()
-            if raw and raw not in madlan_list:
-                madlan_list.append(raw)
-                slugs.append(raw.replace(" ", "_").replace("-", "_"))
+        if canonical and canonical in locations:
+            entry = locations[canonical]
+            he = entry.get("madlan_location")
+            if he and he not in madlan_list:
+                madlan_list.append(he)
+            slug = entry.get("export_slug") or canonical.replace(" ", "_")
+            if slug not in slugs:
+                slugs.append(slug)
             continue
-        entry = locations[canonical]
-        he = entry.get("madlan_location")
-        if he and he not in madlan_list:
-            madlan_list.append(he)
-        slug = entry.get("export_slug") or canonical.replace(" ", "_")
-        if slug not in slugs:
-            slugs.append(slug)
+
+        # Fallback: token may be a Yad2 area (e.g. "Haifa Area" / "Haifa_Area") -> resolve to Madlan cities
+        part_stripped = part.strip()
+        if part_stripped:
+            area_key = _find_yad2_area_key(part_stripped, yad2_areas)
+            if area_key and area_key in area_to_madlan_cities:
+                cities_hebrew = area_to_madlan_cities[area_key]
+                for he in cities_hebrew:
+                    if he and he not in madlan_list:
+                        madlan_list.append(he)
+                slug = part_stripped.replace(" ", "_")
+                if slug not in slugs:
+                    slugs.append(slug)
+                logger.info(
+                    "Resolved %r (%s) from Yad2 area %r -> Madlan cities: %s.",
+                    part_stripped,
+                    caller,
+                    area_key,
+                    cities_hebrew,
+                )
+                continue
+
+            # Still unknown: pass through as-is (might be Hebrew or existing slug)
+            if part_stripped not in madlan_list:
+                madlan_list.append(part_stripped)
+                slugs.append(part_stripped.replace(" ", "_").replace("-", "_"))
+                logger.warning(
+                    "Unknown location %r (%s); using as-is. Add to assets/unified_location_names.json or use a Yad2 area name from assets/yad2_area_IDs.json.",
+                    part_stripped,
+                    caller,
+                )
 
     export_slug = "_".join(slugs) if slugs else "listings"
     return madlan_list, export_slug
