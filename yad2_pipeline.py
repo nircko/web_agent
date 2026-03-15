@@ -175,6 +175,7 @@ def _is_broker_card(card_text: str) -> bool:
     text = card_text.strip()
     if "ללא תיווך" in text:
         return False
+    # Regex: השארת פרטים / מספר רישיון = broker indicators
     if re.search(r"השארת\s*פרטים|מספר\s*רישיון|מספר\s*רשיון", text):
         return True
     return False
@@ -195,6 +196,7 @@ def _classify_seller_type_from_text(text: str) -> Optional[str]:
     t = text.strip()
     if "ללא תיווך" in t:
         return "private"
+    # Regex: השארת פרטים / מספר רישיון = broker indicators
     if re.search(r"השארת\s*פרטים|מספר\s*רישיון|מספר\s*רשיון", t):
         return "broker"
     if "קבלן" in t:
