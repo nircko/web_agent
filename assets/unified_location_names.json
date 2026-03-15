@@ -1,0 +1,201 @@
+{
+  "comment": "Unified English location names for Yad2 and Madlan. Input args (e.g. --locations Haifa) resolve to platform-specific values. Aliases support Hebrew/spelling variants.",
+  "locations": {
+    "Haifa": {
+      "yad2_area": "Haifa Area",
+      "madlan_location": "חיפה",
+      "export_slug": "Haifa_Area"
+    },
+    "Jerusalem": {
+      "yad2_area": "Jerusalem Area",
+      "madlan_location": "ירושלים",
+      "export_slug": "Jerusalem_Area"
+    },
+    "Tel Aviv": {
+      "yad2_area": "Tel Aviv Area",
+      "madlan_location": "תל אביב",
+      "export_slug": "Tel_Aviv_Area"
+    },
+    "Rishon LeZion": {
+      "yad2_area": "Rishon LeZion Area",
+      "madlan_location": "ראשון לציון",
+      "export_slug": "Rishon_LeZion_Area"
+    },
+    "Petah Tikva": {
+      "yad2_area": "Petah Tikva Area",
+      "madlan_location": "פתח תקווה",
+      "export_slug": "Petah_Tikva_Area"
+    },
+    "Netanya": {
+      "yad2_area": "Netanya Area",
+      "madlan_location": "נתניה",
+      "export_slug": "Netanya_Area"
+    },
+    "Beer Sheva": {
+      "yad2_area": null,
+      "yad2_city": "Be'er Sheva",
+      "madlan_location": "באר שבע",
+      "export_slug": "Beer_Sheva"
+    },
+    "Ashdod": {
+      "yad2_area": null,
+      "yad2_city": "Ashdod",
+      "madlan_location": "אשדוד",
+      "export_slug": "Ashdod"
+    },
+    "Holon": {
+      "yad2_area": "Holon & Bat Yam Area",
+      "madlan_location": "חולון",
+      "export_slug": "Holon_Area"
+    },
+    "Bat Yam": {
+      "yad2_area": "Holon & Bat Yam Area",
+      "madlan_location": "בת ים",
+      "export_slug": "Bat_Yam"
+    },
+    "Rehovot": {
+      "yad2_area": "Ness Ziona & Rehovot Area",
+      "madlan_location": "רחובות",
+      "export_slug": "Rehovot_Area"
+    },
+    "Ramat Gan": {
+      "yad2_area": "Ramat Gan & Givatayim Area",
+      "madlan_location": "רמת גן",
+      "export_slug": "Ramat_Gan_Area"
+    },
+    "Givatayim": {
+      "yad2_area": "Ramat Gan & Givatayim Area",
+      "madlan_location": "גבעתיים",
+      "export_slug": "Givatayim_Area"
+    },
+    "Herzliya": {
+      "yad2_area": "Ramat HaSharon & Herzliya Area",
+      "madlan_location": "הרצליה",
+      "export_slug": "Herzliya_Area"
+    },
+    "Ramat HaSharon": {
+      "yad2_area": "Ramat HaSharon & Herzliya Area",
+      "madlan_location": "רמת השרון",
+      "export_slug": "Ramat_HaSharon_Area"
+    },
+    "Ashkelon": {
+      "yad2_area": null,
+      "yad2_city": "Ashkelon",
+      "madlan_location": "אשקלון",
+      "export_slug": "Ashkelon"
+    },
+    "Eilat": {
+      "yad2_area": "Eilat & Arava Area",
+      "madlan_location": "אילת",
+      "export_slug": "Eilat_Area"
+    },
+    "Modiin": {
+      "yad2_area": "Modiin Area",
+      "madlan_location": "מודיעין",
+      "export_slug": "Modiin_Area"
+    },
+    "Lod": {
+      "yad2_area": "Lod & Ramla Area",
+      "madlan_location": "לוד",
+      "export_slug": "Lod_Area"
+    },
+    "Ramla": {
+      "yad2_area": "Lod & Ramla Area",
+      "madlan_location": "רמלה",
+      "export_slug": "Ramla_Area"
+    },
+    "Ness Ziona": {
+      "yad2_area": "Ness Ziona & Rehovot Area",
+      "madlan_location": "נס ציונה",
+      "export_slug": "Ness_Ziona_Area"
+    },
+    "Ra'anana": {
+      "yad2_area": null,
+      "yad2_city": "Ra'anana",
+      "madlan_location": "רעננה",
+      "export_slug": "Raanana"
+    },
+    "Kfar Saba": {
+      "yad2_area": null,
+      "yad2_city": "Kfar Saba",
+      "madlan_location": "כפר סבא",
+      "export_slug": "Kfar_Saba"
+    },
+    "Hod HaSharon": {
+      "yad2_area": null,
+      "yad2_city": "Hod HaSharon",
+      "madlan_location": "הוד השרון",
+      "export_slug": "Hod_HaSharon"
+    },
+    "Rosh HaAyin": {
+      "yad2_area": null,
+      "yad2_city": "Rosh HaAyin",
+      "madlan_location": "ראש העין",
+      "export_slug": "Rosh_HaAyin"
+    },
+    "Yavne": {
+      "yad2_area": null,
+      "yad2_city": "Yavne",
+      "madlan_location": "יבנה",
+      "export_slug": "Yavne"
+    },
+    "Krayot": {
+      "yad2_area": "Krayot Area",
+      "madlan_location": "קרית מוצקין",
+      "export_slug": "Krayot_Area"
+    },
+    "Nahariya": {
+      "yad2_area": null,
+      "madlan_location": "נהריה",
+      "export_slug": "Nahariya"
+    },
+    "Beit Shemesh": {
+      "yad2_area": null,
+      "yad2_city": "Beit Shemesh",
+      "madlan_location": "בית שמש",
+      "export_slug": "Beit_Shemesh"
+    },
+    "Zikhron Ya'akov": {
+      "yad2_area": "Zikhron Ya'akov & Hof HaCarmel Area",
+      "madlan_location": "זיכרון יעקב",
+      "export_slug": "Zikhron_Yaakov_Area"
+    }
+  },
+  "aliases": {
+    "Haifa Area": "Haifa",
+    "חיפה": "Haifa",
+    "Jerusalem Area": "Jerusalem",
+    "ירושלים": "Jerusalem",
+    "Tel Aviv Area": "Tel Aviv",
+    "תל אביב": "Tel Aviv",
+    "Rishon LeZion Area": "Rishon LeZion",
+    "ראשון לציון": "Rishon LeZion",
+    "Petah Tikva Area": "Petah Tikva",
+    "פתח תקווה": "Petah Tikva",
+    "Netanya Area": "Netanya",
+    "נתניה": "Netanya",
+    "Be'er Sheva": "Beer Sheva",
+    "באר שבע": "Beer Sheva",
+    "אשדוד": "Ashdod",
+    "חולון": "Holon",
+    "בת ים": "Bat Yam",
+    "רחובות": "Rehovot",
+    "רמת גן": "Ramat Gan",
+    "גבעתיים": "Givatayim",
+    "הרצליה": "Herzliya",
+    "אשקלון": "Ashkelon",
+    "אילת": "Eilat",
+    "מודיעין": "Modiin",
+    "לוד": "Lod",
+    "רמלה": "Ramla",
+    "נס ציונה": "Ness Ziona",
+    "רעננה": "Ra'anana",
+    "כפר סבא": "Kfar Saba",
+    "הוד השרון": "Hod HaSharon",
+    "ראש העין": "Rosh HaAyin",
+    "יבנה": "Yavne",
+    "Krayot Area": "Krayot",
+    "נהריה": "Nahariya",
+    "רמת השרון": "Ramat HaSharon"
+  }
+}
