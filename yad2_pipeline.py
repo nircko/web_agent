@@ -13,7 +13,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Set, Union
 
-import openrouteservice
+try:
+    import openrouteservice
+except ModuleNotFoundError:
+    openrouteservice = None  # type: ignore[assignment]
+    logging.warning(
+        "openrouteservice not installed; route calculation will be skipped. Install with: pip install openrouteservice"
+    )
 import pandas as pd
 import requests
 from requests import RequestsDependencyWarning
@@ -56,7 +62,7 @@ DEFAULT_FILTER_PREFERENCES = {
         "propertyCondition": [5, 3],
     },
     "post_filters": {
-        "publication_cutoff_months": 3,
+        "last_publication_month": 3,
         "max_floor_total": 7,
         "cities_to_skip": [],
         "private_only": False,
@@ -80,8 +86,10 @@ def _normalize_preferences(data: Dict[str, Any]) -> Dict[str, Any]:
         out["url_filters"]["minSquareMeterBuild"] = int(data["min_square_meters"])
     if "property_condition" in data and data["property_condition"] is not None:
         out["url_filters"]["propertyCondition"] = list(data["property_condition"])
-    if "publication_max_months" in data and data["publication_max_months"] is not None:
-        out["post_filters"]["publication_cutoff_months"] = int(data["publication_max_months"])
+    if "last_publication_month" in data and data["last_publication_month"] is not None:
+        out["post_filters"]["last_publication_month"] = int(data["last_publication_month"])
+    elif "publication_max_months" in data and data["publication_max_months"] is not None:
+        out["post_filters"]["last_publication_month"] = int(data["publication_max_months"])
     if "max_building_floors" in data and data["max_building_floors"] is not None:
         out["post_filters"]["max_floor_total"] = int(data["max_building_floors"])
     if "exclude_cities" in data and data["exclude_cities"] is not None:
@@ -538,7 +546,11 @@ class RouteCalculator:
     BEER_SHEVA_CENTER = (31.252972, 34.791463)
 
     def __init__(self, api_key: str):
-        self.client = openrouteservice.Client(key=api_key)
+        if openrouteservice is None:
+            self.client = None
+            logging.warning("RouteCalculator: openrouteservice not available, routing will be skipped.")
+        else:
+            self.client = openrouteservice.Client(key=api_key)
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -547,6 +559,8 @@ class RouteCalculator:
         reraise=True,
     )
     def _route(self, origin: Tuple[float, float], dest: Tuple[float, float]) -> Optional[Tuple[float, float]]:
+        if self.client is None:
+            return None
         # openrouteservice expects [lon, lat]
         coords = (
             (origin[1], origin[0]),
@@ -566,7 +580,7 @@ class RouteCalculator:
         return duration_min, distance_km
 
     def compute_routes_for_listing(self, record: ListingRecord, run_summary: RunSummary) -> None:
-        if not record.latitude or not record.longitude:
+        if self.client is None or not record.latitude or not record.longitude:
             return
         origin = (record.latitude, record.longitude)
 
@@ -665,8 +679,8 @@ class Yad2Scraper:
         self.listing_type: str = str(prefs.get("listing_type") or "forsale").strip()
         self.url_filters: Dict[str, Any] = dict(url_filters)
 
-        # Post-filters: publication cutoff (months -> days), max_floor_total
-        pub_months = post_filters.get("publication_cutoff_months")
+        # Post-filters: publication cutoff (last_publication_month -> days), max_floor_total
+        pub_months = post_filters.get("last_publication_month") or post_filters.get("publication_cutoff_months")
         self.publication_cutoff_days: int = int(pub_months * 30) if isinstance(pub_months, (int, float)) else 90
         floor_total = post_filters.get("max_floor_total")
         self.max_floor_total: int = int(floor_total) if isinstance(floor_total, (int, float)) else 7
@@ -805,8 +819,8 @@ class Yad2Scraper:
         except Exception:
             pass
 
-    def scrape(self) -> None:
-        self._print_run_plan()
+    def _scrape_impl(self) -> None:
+        """Run the actual Playwright scrape (sync). Called directly or from a thread when inside asyncio (e.g. Jupyter)."""
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             try:
@@ -843,6 +857,21 @@ class Yad2Scraper:
                 self._export_fixed_hebrew_xlsx()
             finally:
                 browser.close()
+
+    def scrape(self) -> None:
+        self._print_run_plan()
+        try:
+            asyncio.get_running_loop()
+            running_async = True
+        except RuntimeError:
+            running_async = False
+        if running_async:
+            # Jupyter / asyncio context: sync Playwright cannot run in the same thread. Run in a worker thread.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(self._scrape_impl).result()
+        else:
+            self._scrape_impl()
 
     def _extract_listing_id_from_url(self, url: str) -> Optional[str]:
         # Try to extract numeric ID from path or query.
@@ -1681,15 +1710,16 @@ class Yad2Scraper:
                 search_page_number=search_page_number,
             )
 
-            # Enforce publication date freshness (from post_filters.publication_cutoff_months)
+            # Enforce publication date freshness (from post_filters.last_publication_month)
             cutoff_date = (datetime.now(timezone.utc) - timedelta(days=self.publication_cutoff_days)).date()
+            months_label = self.publication_cutoff_days // 30
             if record.publication_date_iso:
                 try:
                     pub_date = datetime.strptime(record.publication_date_iso, "%Y-%m-%d").date()
                     if pub_date < cutoff_date:
                         logging.info(
                             f"Listing {listing_id} publication date {pub_date} "
-                            f"FAILED 3-month filter (cutoff {cutoff_date}), skipping listing."
+                            f"FAILED {months_label}-month filter (cutoff {cutoff_date}), skipping listing."
                         )
                         self.run_summary.total_listings_filtered_by_date += 1
                         # Do not download images or persist debug artifacts for filtered-out-by-date listings.
@@ -1697,7 +1727,7 @@ class Yad2Scraper:
                     else:
                         logging.info(
                             f"Listing {listing_id} publication date {pub_date} "
-                            f"PASSED 3-month filter (cutoff {cutoff_date})."
+                            f"PASSED {months_label}-month filter (cutoff {cutoff_date})."
                         )
                 except Exception as e:
                     logging.warning(
@@ -1810,7 +1840,9 @@ def main() -> None:
     if args.locations and args.locations.strip():
         try:
             from unified_locations import resolve_locations_to_yad2
-            areas_override, cities_override, export_slug = resolve_locations_to_yad2(args.locations.strip())
+            areas_override, cities_override, export_slug = resolve_locations_to_yad2(
+                args.locations.strip(), caller="Yad2"
+            )
             if not areas_override and not cities_override:
                 logging.warning("No locations resolved from %r; using preferences.", args.locations)
                 areas_override = None

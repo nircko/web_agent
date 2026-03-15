@@ -203,7 +203,7 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 - **cities** — Optional list of city names. At most 3 per district.
 - **price_min**, **price_max** — ILS.
 - **max_floor**, **min_square_meters**, **property_condition** — URL filters.
-- **publication_max_months** — Drop listings older than this many months.
+- **last_publication_month** — Drop listings older than this many months (e.g. 1 = only last month).
 - **max_building_floors** — Skip listings in buildings with more floors than this.
 - **exclude_cities** — City names to exclude after parsing.
 - **exclude_neighborhoods** — Neighborhood names to exclude (used by Madlan pipeline; can be added to Yad2 post-filters later).

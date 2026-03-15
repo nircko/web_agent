@@ -8,7 +8,7 @@
   "private_only_madlan": false,
   "max_floor": 4,
   "min_square_meters": 90,
-  "publication_max_months": 3,
+  "last_publication_month": 3,
   "max_building_floors": 7,
   "exclude_cities": [],
   "exclude_neighborhoods": [],

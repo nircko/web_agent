@@ -7,6 +7,7 @@ images/{id}/, debug/ (PNG/HTML for exported listings only), fixed_hebrew_file.xl
 Supports exclude_cities and exclude_neighborhoods in preferences (extra effort on avoid lists).
 """
 
+import asyncio
 import csv
 import json
 import logging
@@ -88,7 +89,7 @@ def _default_madlan_preferences() -> Dict[str, Any]:
         "private_only_madlan": False,
         "max_floor": 4,
         "min_square_meters": 90,
-        "publication_max_months": 3,
+        "last_publication_month": 3,
         "max_building_floors": 7,
         "exclude_cities": [],
         "exclude_neighborhoods": [],
@@ -141,7 +142,7 @@ class MadlanScraper:
             if n and str(n).strip():
                 self.neighborhoods_to_skip.add(str(n).strip())
 
-        self.publication_cutoff_days = int((prefs.get("publication_max_months") or 3) * 30)
+        self.publication_cutoff_days = int((prefs.get("last_publication_month") or prefs.get("publication_max_months") or 3) * 30)
         self.max_floor_total = int(prefs.get("max_building_floors") or 7)
         if "private_only_madlan" in prefs:
             self.private_only_madlan = bool(prefs.get("private_only_madlan"))
@@ -232,7 +233,7 @@ class MadlanScraper:
         t.add_row("Private only (Madlan)", str(self.private_only_madlan))
         t.add_row("Exclude cities", ", ".join(self.cities_to_skip) or "(none)")
         t.add_row("Exclude neighborhoods", ", ".join(self.neighborhoods_to_skip) or "(none)")
-        t.add_row("Publication ≤ months", str(self._prefs.get("publication_max_months", 3)))
+        t.add_row("Last publication month", str(self._prefs.get("last_publication_month", self._prefs.get("publication_max_months", 3))))
         t.add_row("Max building floors", str(self.max_floor_total))
         t.add_row("Private only (detail)", str(self.private_only))
         t.add_row("Trust URL seller filter", str(self.trust_url_seller_filter))
@@ -245,8 +246,8 @@ class MadlanScraper:
             encoding="utf-8",
         )
 
-    def scrape(self) -> None:
-        self._print_run_plan()
+    def _scrape_impl(self) -> None:
+        """Run the actual Playwright scrape (sync). Called directly or from a thread when inside asyncio (e.g. Jupyter)."""
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             try:
@@ -264,6 +265,20 @@ class MadlanScraper:
                 self._export_fixed_hebrew_xlsx()
             finally:
                 browser.close()
+
+    def scrape(self) -> None:
+        self._print_run_plan()
+        try:
+            asyncio.get_running_loop()
+            running_async = True
+        except RuntimeError:
+            running_async = False
+        if running_async:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(self._scrape_impl).result()
+        else:
+            self._scrape_impl()
 
     def _extract_listing_id_from_url(self, url: str) -> Optional[str]:
         m = re.search(r"/listings/([a-zA-Z0-9_-]+)", url)
@@ -769,7 +784,7 @@ def main() -> None:
     if args.locations:
         try:
             from unified_locations import resolve_locations_to_madlan
-            locations_list, export_slug = resolve_locations_to_madlan(args.locations)
+            locations_list, export_slug = resolve_locations_to_madlan(args.locations, caller="Madlan")
             if locations_list:
                 prefs["locations"] = locations_list
         except Exception as e:
