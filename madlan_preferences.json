@@ -14,6 +14,5 @@
   "exclude_neighborhoods": [],
   "private_only": false,
   "captcha_avoidance_min": 0,
-  "listing_open_delay_sec": 2,
-  "captcha_solve_wait_sec": 5
+  "listing_open_delay_sec": 15
 }

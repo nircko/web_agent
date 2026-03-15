@@ -155,8 +155,11 @@ python yad2_pipeline.py --output-dir "C:\Users\YourName\Documents\yad2_output" -
 | `--output-dir` | `output` | Root folder for CSV, images, debug, logs. |
 | `--max-pages` | `4` | Number of search result pages to visit per area. |
 | `--captcha-avoidance-min` | `0` | Minutes to sleep between pages to reduce captcha risk. |
+| `--captcha-solve-seconds` | *(from preferences)* | Override seconds to wait for you to solve a captcha (e.g. `60`). Increase if you need more time; applies to this run only. |
 | `--headless` | `1` | `1` = no browser window (default); `0` = visible window (for debugging and solving captchas manually). |
 | `--locations` | *(none)* | City/area to search (unified for Yad2 and Madlan). English or legacy names, comma-separated (e.g. `'Haifa'`, `'Haifa, Rehovot'`, `'Rishon LeZion Area'`). Resolved via `assets/unified_location_names.json`; unknown tokens are also matched against **`assets/yad2_area_IDs.json`** area names (e.g. `'Haifa Area'` or `'Haifa_Area'`). If omitted, uses areas/cities from preferences. |
+
+Run **`python yad2_pipeline.py --help`** for full CLI options and descriptions.
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 
@@ -197,6 +200,7 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 
 **User-friendly format (root file):**
 
+- **captcha_solve_seconds** — Seconds to wait for you to solve a challenge/captcha page. **Yad2 default: 15**. **Madlan default: 45** (Madlan often shows 2 consecutive captchas; if you set less than 45 for Madlan, the scraper shows a **very visible warning**). Set in the root of `scraper_preferences.json` or in the `madlan` section for Madlan only; or **override per-run** with CLI `--captcha-solve-seconds`.
 - **default_region** — Used only when **areas** and **cities** are both empty. If you set areas or cities, district is deduced from those lists and this value is ignored.
 - **listing_type** — e.g. `"forsale"`.
 - **areas** — Optional list of area names (see `assets/yad2_area_IDs.json`). Each must belong to one district.
@@ -233,8 +237,29 @@ python madlan_pipeline.py --output-dir output_madlan --max-pages 4 --headless 1
 - **use_israel_bbox** + **bbox** — Set `use_israel_bbox: true` and optionally `bbox: [west, south, east, north]` for map-style country search: `/for-sale/ישראל?bbox=...&filters=...` (same filters; see [example](https://www.madlan.co.il/for-sale/%D7%99%D7%A9%D7%A8%D7%90%D7%9C?bbox=33.29348%2C29.48782%2C36.86953%2C33.33522&filters=...)).
 - **exclude_cities** — Cities to skip (extra effort on avoid lists).
 - **exclude_neighborhoods** — Neighborhoods to skip (e.g. `["כרמליה", "הדר"]`).
+- **listing_open_delay_sec** (default `15`, Madlan only) — Seconds to wait before opening each new listing page. Reduces opening too many windows at once. Override per-run with `--listing-open-delay-sec`.
+- **captcha_solve_seconds** — Default from root (unified with Yad2). Set a higher value for Madlan only in the `madlan` section or `madlan_preferences.json`, or override per-run with `--captcha-solve-seconds`. When Madlan shows a challenge page (“סליחה על ההפרעה...”, “רובוט”, etc.), the script waits this many seconds for you to solve it, then prompts for Enter. **If you don’t have enough time to solve it, increase this value** in `scraper_preferences.json` (root key) or notebook CONFIG; both pipelines use it. The script detects the challenge by page text and will not open the next window until you’ve solved it or pressed Enter.
+
+**CLI overrides for Madlan:** `--captcha-solve-seconds 60` (this run only; e.g. for slower captcha), `--listing-open-delay-sec 20` (delay before opening each new listing tab). Run **`python madlan_pipeline.py --help`** for all options. The scraper logs `Using user override: captcha_solve_seconds=60 (Madlan)` when you use an override.
 
 The Madlan URL filter string is built from these (see [Madlan search URL](https://www.madlan.co.il/for-sale/חיפה-ישראל?filters=...)). You can add cities/areas in the path (e.g. `חיפה-ישראל,אזור-דרום-ישראל,רחובות-ישראל`). Listing pages enrich **`property_technical_profile_en`** (and related CSV columns) from `window.__SSR_HYDRATED_CONTEXT__` (e.g. `addressSearch.poi`: year/floor), schema.org `additionalProperty`, breadcrumbs / `assumedDesignRange`, and description keywords (transit / nuisances). Shared parsing lives in `listing_extract_common.py`; Yad2 reuses `parse_float` / `parse_int` from the same module. The summary PowerPoint and `fixed_hebrew_file.xlsx` work the same on `output_madlan/` as on `output/`.
+
+**Summary: user-defined options**
+
+| Option | Config (file / key) | CLI (Yad2) | CLI (Madlan) | Comment |
+|--------|----------------------|------------|--------------|---------|
+| Captcha solve time | Root or Madlan block `captcha_solve_seconds` | `--captcha-solve-seconds SECONDS` | `--captcha-solve-seconds SECONDS` | Yad2 default 15 s; Madlan default 45 s (warning if &lt;45). Logged when overridden. |
+| Listing open delay | Madlan: `listing_open_delay_sec` | — | `--listing-open-delay-sec SECONDS` | Seconds before opening each new listing tab; reduce new windows. |
+| Captcha avoidance | Root / Madlan: `captcha_avoidance_min` | `--captcha-avoidance-min` | `--captcha-avoidance-min` | Minutes between search pages. |
+| Output dir, pages, headless, locations | Preferences + CLI | `--output-dir`, `--max-pages`, `--headless`, `--locations` | Same | See `--help` on each script. |
+
+**Location data (assets/)** — All city and location lookup JSON files live under **`assets/`**: `unified_location_names.json`, `yad2_area_IDs.json`, `madlan_config.json`. To add a new city so it works with `--locations` and both pipelines, use the translation helper:
+
+```bash
+python scripts/add_city_to_lookups.py "City Name English" "District" YAD2_CITY_ID [--madlan-hebrew "עיר בעברית"]
+```
+
+Example: `python scripts/add_city_to_lookups.py "Tirat Carmel" "Northern Coastal Plain" 2100 --madlan-hebrew "טירת כרמל"`. This updates `assets/yad2_area_IDs.json` (city + district), `assets/unified_location_names.json` (locations + aliases), and `assets/madlan_config.json` (location_slugs) if `--madlan-hebrew` is given. District must be one of: Center and Sharon, Jerusalem and surroundings, North and Valleys, Northern Coastal Plain, South, Tel Aviv and surroundings.
 
 ### 6. Outputs
 

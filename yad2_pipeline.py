@@ -621,7 +621,12 @@ class Yad2Scraper:
         cities: Optional[List[str]] = None,
         filter_preferences: Optional[Dict[str, Any]] = None,
         export_slug: Optional[str] = None,
+        captcha_solve_seconds: Optional[int] = None,
     ):
+        """
+        Optional captcha_solve_seconds: user override (e.g. from CLI). If set, overrides
+        the value from scraper_preferences.json so the user can increase time for this run.
+        """
         self.output_dir = output_dir
         self.export_slug = (export_slug or "").strip() or None
         self.images_dir = output_dir / "images"
@@ -640,9 +645,16 @@ class Yad2Scraper:
         url_filters = prefs.get("url_filters") or {}
         post_filters = prefs.get("post_filters") or {}
 
-        # Configuration knobs
+        # Configuration knobs: captcha_solve_seconds is unified with Madlan (scraper_preferences.json root);
+        # user can override per-run via CLI or constructor to increase time (e.g. for slow captcha).
         self.max_pages = max(1, int(max_pages))
         self.captcha_avoidance_min = max(0.0, float(captcha_avoidance_min))
+        _captcha_from_prefs = max(5, int(prefs.get("captcha_solve_seconds", 15)))
+        if captcha_solve_seconds is not None and captcha_solve_seconds >= 5:
+            self.captcha_solve_seconds = max(5, int(captcha_solve_seconds))
+            logging.info("Using user override: captcha_solve_seconds=%s (Yad2)", self.captcha_solve_seconds)
+        else:
+            self.captcha_solve_seconds = _captcha_from_prefs
         self.headless = bool(headless)
 
         # cities_to_skip: from post_filters, then override with explicit argument
@@ -767,6 +779,7 @@ class Yad2Scraper:
             "Post-filters",
             f"publication ≤ {self.publication_cutoff_days // 30} months, max_floor_total {self.max_floor_total}, exclude_cities {list(self.cities_to_skip) or '[]'}, private_only={self.private_only}",
         )
+        filters_table.add_row("Captcha solve (sec)", str(self.captcha_solve_seconds) + " (Yad2 default 15 s)")
         filters_table.add_row("Run", f"max_pages={self.max_pages}, headless={self.headless}, output={self.output_dir}")
 
         console.print(Panel(filters_table, title="[bold cyan] INPUT FILTERS [/]", border_style="cyan"))
@@ -884,7 +897,7 @@ class Yad2Scraper:
         return None
 
     def _wait_for_captcha_solved(self, page: Page, context: str) -> None:
-        """If the page shows ShieldSquare/captcha and we're not headless, wait for user to solve it."""
+        """If the page shows ShieldSquare/captcha and we're not headless, wait for user to solve it (unified captcha_solve_seconds with Madlan)."""
         while True:
             try:
                 title = page.title() or ""
@@ -898,10 +911,15 @@ class Yad2Scraper:
                     "cannot wait for manual solve. Consider running with --headless 0."
                 )
                 break
-            logging.info(f"Captcha/ShieldSquare detected on {context}.")
-            logging.info("Solve the captcha in the browser window, then press Enter here to continue.")
+            logging.info(
+                "Captcha/ShieldSquare detected on %s. You have %s seconds to solve it. "
+                "Increase captcha_solve_seconds in scraper_preferences.json if you need more time.",
+                context,
+                self.captcha_solve_seconds,
+            )
+            page.wait_for_timeout(self.captcha_solve_seconds * 1000)
             input("Press Enter when the real page is visible to continue... ")
-            page.wait_for_timeout(2000)  # give the page a moment to update after solve
+            page.wait_for_timeout(self.captcha_solve_seconds * 1000)
         return
 
     def _process_search_page(self, browser: Browser, url: str, page_number: int) -> None:
@@ -1826,6 +1844,16 @@ def main() -> None:
             "Resolved via assets/unified_location_names.json. If omitted, uses areas/cities from preferences."
         ),
     )
+    parser.add_argument(
+        "--captcha-solve-seconds",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "Override seconds to wait for you to solve a captcha (default from scraper_preferences.json, usually 15 for Yad2). "
+            "Increase this if you need more time; applies to this run only."
+        ),
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -1894,6 +1922,7 @@ def main() -> None:
         cities=cities_override,
         filter_preferences=filter_prefs,
         export_slug=export_slug,
+        captcha_solve_seconds=args.captcha_solve_seconds,
     )
     scraper.scrape()
 
