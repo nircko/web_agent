@@ -17,6 +17,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
@@ -59,24 +60,42 @@ from rich import box
 
 
 def load_madlan_preferences(project_root: Optional[Path] = None) -> Dict[str, Any]:
-    """Load Madlan preferences from scraper_preferences.json (madlan key) or madlan_preferences.json."""
+    """Load Madlan preferences used for scraping.
+
+    Priority:
+    1. Inline JSON from MADLAN_PREFERENCES_INLINE (web UI for this run)
+    2. scraper_preferences.json 'madlan' section
+    3. madlan_preferences.json
+    4. Built-in defaults
+    """
+    inline = os.getenv("MADLAN_PREFERENCES_INLINE")
+    if inline:
+        try:
+            data = json.loads(inline)
+            if isinstance(data, dict):
+                return dict(data)
+        except Exception as e:
+            logging.warning("Failed to load MADLAN_PREFERENCES_INLINE: %s; falling back to files.", e)
+
     root = Path(project_root or __file__).resolve().parent
-    # Try madlan section in scraper_preferences.json first
+    # scraper_preferences.json 'madlan' section
     prefs_path = root / "scraper_preferences.json"
     if prefs_path.exists():
         try:
             data = json.loads(prefs_path.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "madlan" in data:
                 return dict(data["madlan"])
-        except Exception:
-            pass
-    # Standalone file
+        except Exception as e:
+            logging.warning("Failed to load madlan prefs from %s: %s", prefs_path, e)
+
+    # Standalone madlan_preferences.json
     madlan_path = root / "madlan_preferences.json"
     if madlan_path.exists():
         try:
             return json.loads(madlan_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Failed to load madlan_preferences.json: %s", e)
+
     return _default_madlan_preferences()
 
 
@@ -554,15 +573,27 @@ class MadlanScraper:
         if amen.get("balcony"):
             record.balcony_count = record.balcony_count or 1
 
-        # Price: ₪2,200,000 — collect all ₪ numbers and take the main listing price (largest plausible, > 50k)
+        # Price: first try JSON-LD / inline JSON (priceCurrency + price), then visible ₪ amounts
+        if record.price_ils is None:
+            m_json = re.search(
+                r'"priceCurrency"\s*:\s*"(?:ILS|₪|NIS)"[^}]*"price"\s*:\s*([\d\.]+)',
+                html,
+            )
+            if m_json:
+                p = parse_float(m_json.group(1))
+                if p and p >= 50000:
+                    record.price_ils = p
+
+        # Fallback: collect all ₪ numbers and take the main listing price (largest plausible, > 50k)
         all_prices = []
         for m in re.finditer(r"₪\s*([\d,\.]+)", text):
             p = parse_float(m.group(1))
             if p is not None and p > 0:
                 all_prices.append(p)
-        if all_prices:
-            main_price = max(p for p in all_prices if p >= 50000) if any(p >= 50000 for p in all_prices) else max(all_prices)
-            if main_price >= 50000:
+        if all_prices and (record.price_ils is None or record.price_ils < 50000):
+            big_prices = [p for p in all_prices if p >= 50000]
+            main_price = max(big_prices) if big_prices else None
+            if main_price is not None:
                 record.price_ils = main_price
         if record.price_ils is None or record.price_ils < 50000:
             price_el = soup.find(string=re.compile(r"₪\s*[\d,\.]+"))
@@ -570,8 +601,6 @@ class MadlanScraper:
                 p = parse_float(str(price_el))
                 if p and p >= 50000:
                     record.price_ils = p
-        if (record.price_ils is None or record.price_ils < 50000) and all_prices:
-            record.price_ils = max(all_prices)
 
         # Rooms, floor, size — SSR first, then regex
         if not record.rooms and poi.get("rooms") is not None:
