@@ -343,6 +343,34 @@
     .muted {
       color: var(--text-muted);
     }
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      max-height: 140px;
+      overflow: auto;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(15,23,42,0.9);
+    }
+    .checkbox-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .field-error {
+      font-size: 0.74rem;
+      color: var(--danger);
+      margin-top: 2px;
+    }
+    .input-readonly {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: rgba(15,23,42,0.7);
+    }
   </style>
 </head>
 <body>
@@ -358,11 +386,12 @@
       </div>
     </div>
 
+    <!-- 1. Single listing inspection -->
     <div class="layout">
       <!-- Left: input & log -->
       <div class="card">
-        <h2>1. Input &amp; status</h2>
-        <p>Enter a listing URL from <strong>yad2.co.il</strong> or <strong>madlan.co.il</strong>, then click Analyze.</p>
+        <h2>1. Single listing inspection</h2>
+        <p>Paste one listing URL from <strong>yad2.co.il</strong> or <strong>madlan.co.il</strong>, then click Analyze to see a clean summary.</p>
 
         <label for="url-input">Listing URL</label>
         <div class="url-row">
@@ -413,6 +442,247 @@
         </div>
       </div>
     </div>
+
+    <!-- Batch Scraping to Excel: preferences + run + log -->
+    <div id="batch-box" class="card" style="margin-top:24px;">
+      <h2>Batch Scraping to Excel</h2>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-top:4px;">
+        Configure what to scrape (filters), then run a full batch and see where the Excel files are saved.
+      </p>
+
+      <!-- 2. Scraping preferences -->
+      <section id="prefs-section" style="margin-top:14px;">
+        <h3>2. Scraping preferences</h3>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 10px;">
+          Decide which listings to include: areas, cities, price, rooms, size and seller type.
+        </p>
+
+        <h4 style="margin-top:4px;font-size:0.86rem;">General &amp; Yad2 filters</h4>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 8px;">
+          These filters control which Yad2 listings are collected across all batch runs.
+        </p>
+        <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;">
+          <div>
+            <label for="pref-default-region" title="Default region / district when areas &amp; cities are empty.">Default region</label>
+            <select id="pref-default-region">
+              <option value="">Auto (from areas/cities)</option>
+              <option value="Tel Aviv and surroundings">Tel Aviv and surroundings</option>
+              <option value="Center and Sharon">Center and Sharon</option>
+              <option value="Jerusalem and surroundings">Jerusalem and surroundings</option>
+              <option value="Northern Coastal Plain">Northern Coastal Plain</option>
+              <option value="North and Valleys">North and Valleys</option>
+              <option value="South">South</option>
+            </select>
+          </div>
+          <div>
+            <label for="pref-listing-type" title="Listing type, e.g. forsale / rent.">Listing type</label>
+            <input id="pref-listing-type" type="text" placeholder="forsale" readonly class="input-readonly" />
+            <p class="muted" style="font-size:0.74rem;margin:2px 0 0;">
+              Currently fixed to "forsale". This may be configurable in a future version.
+            </p>
+          </div>
+          <div>
+            <label>Areas</label>
+            <p class="muted" style="font-size:0.74rem;margin:2px 0 6px;">
+              Choose one or more Yad2 areas. Leave empty to rely on cities.
+            </p>
+            <div id="pref-areas-group" class="checkbox-group"></div>
+            <div id="pref-areas-error" class="field-error"></div>
+          </div>
+          <div>
+            <label>Cities</label>
+            <p class="muted" style="font-size:0.74rem;margin:2px 0 6px;">
+              Choose one or more cities. You can leave this empty and filter only by area.
+            </p>
+            <div id="pref-cities-group" class="checkbox-group"></div>
+            <div id="pref-cities-error" class="field-error"></div>
+          </div>
+          <div>
+            <label for="pref-price-min" title="Minimum price in ILS.">Price min (ILS)</label>
+            <input id="pref-price-min" type="number" />
+          </div>
+          <div>
+            <label for="pref-price-max" title="Maximum price in ILS.">Price max (ILS)</label>
+            <input id="pref-price-max" type="number" />
+          </div>
+          <div>
+            <label for="pref-max-floor" title="Maximum floor to include (per listing).">Max floor</label>
+            <input id="pref-max-floor" type="number" />
+          </div>
+          <div>
+            <label for="pref-min-sqm" title="Minimum built square meters.">Min sqm</label>
+            <input id="pref-min-sqm" type="number" />
+          </div>
+          <div>
+            <label for="pref-last-pub-month" title="Maximum age of publication in months.">Last publication month</label>
+            <input id="pref-last-pub-month" type="number" />
+          </div>
+          <div>
+            <label for="pref-max-building-floors" title="Maximum total floors in the building.">Max building floors</label>
+            <input id="pref-max-building-floors" type="number" />
+          </div>
+          <div>
+            <label for="pref-exclude-cities" title="Cities to skip, comma-separated.">Exclude cities</label>
+            <input id="pref-exclude-cities" type="text" placeholder="[]" />
+          </div>
+          <div>
+            <label for="pref-exclude-neighborhoods" title="Neighborhoods to skip, comma-separated.">Exclude neighborhoods</label>
+            <input id="pref-exclude-neighborhoods" type="text" placeholder="[]" />
+          </div>
+        </div>
+
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:16px;font-size:0.8rem;color:var(--text-muted);">
+          <label style="display:flex;align-items:center;gap:6px;">
+            <input id="pref-private-only" type="checkbox" />
+            <span>Private sellers only (no agencies)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;">
+            <input id="pref-yad2-property-condition" type="text" style="min-width:160px;" placeholder="5,3" />
+            <span title="Yad2 property condition codes, comma-separated (advanced).">Property condition codes</span>
+          </label>
+        </div>
+
+        <h4 style="margin-top:18px;font-size:0.86rem;">Madlan-specific filters</h4>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 8px;">
+          These filters apply when scraping Madlan, including how cautiously we avoid captchas.
+        </p>
+        <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;">
+          <div>
+            <label for="pref-madlan-locations" title="Madlan locations, comma-separated (Hebrew or English).">Locations</label>
+            <input id="pref-madlan-locations" type="text" placeholder="חיפה" />
+          </div>
+          <div>
+            <label for="pref-madlan-price-min">Price min (ILS)</label>
+            <input id="pref-madlan-price-min" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-price-max">Price max (ILS)</label>
+            <input id="pref-madlan-price-max" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-rooms-min">Rooms min</label>
+            <input id="pref-madlan-rooms-min" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-rooms-max">Rooms max</label>
+            <input id="pref-madlan-rooms-max" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-max-floor">Max floor</label>
+            <input id="pref-madlan-max-floor" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-min-sqm">Min sqm</label>
+            <input id="pref-madlan-min-sqm" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-last-pub-month">Last publication month</label>
+            <input id="pref-madlan-last-pub-month" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-max-building-floors">Max building floors</label>
+            <input id="pref-madlan-max-building-floors" type="number" />
+          </div>
+          <div>
+            <label for="pref-madlan-exclude-cities">Exclude cities</label>
+            <input id="pref-madlan-exclude-cities" type="text" placeholder="[]" />
+          </div>
+          <div>
+            <label for="pref-madlan-exclude-neighborhoods">Exclude neighborhoods</label>
+            <input id="pref-madlan-exclude-neighborhoods" type="text" placeholder="[]" />
+          </div>
+          <div>
+            <label for="pref-madlan-property-condition" title="Madlan property condition labels, comma-separated.">Property condition labels</label>
+            <input id="pref-madlan-property-condition" type="text" placeholder="toRenovated,preserved" />
+          </div>
+          <div>
+            <label for="pref-madlan-captcha-min" title="Minutes to wait between search pages to avoid captchas.">Captcha avoidance (min)</label>
+            <input id="pref-madlan-captcha-min" type="number" step="0.1" />
+          </div>
+          <div>
+            <label for="pref-madlan-open-delay" title="Seconds to wait before opening each listing tab.">Listing open delay (sec)</label>
+            <input id="pref-madlan-open-delay" type="number" step="1" />
+          </div>
+        </div>
+
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:16px;font-size:0.8rem;color:var(--text-muted);">
+          <label style="display:flex;align-items:center;gap:6px;">
+            <input id="pref-madlan-private-only" type="checkbox" />
+            <span>Madlan: private sellers only</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;">
+            <input id="pref-madlan-private-only-root" type="checkbox" />
+            <span>Shared private_only (root)</span>
+          </label>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+          <button id="prefs-reload-btn" class="btn secondary">
+            <span>Reload current settings</span>
+          </button>
+          <button id="prefs-save-btn" class="btn">
+            <span>Save preferences for future runs</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. Run batch + log -->
+      <section id="batch-run-section" style="margin-top:20px;">
+        <h3>3. Run batch scraping</h3>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 10px;">
+          Pick the sites to scrape and how many pages to visit, then start the run and follow the log.
+        </p>
+
+        <div style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;">
+          <div>
+            <label for="batch-website">Sites to scrape</label>
+            <select id="batch-website" style="width:100%;padding:8px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.5);background:rgba(15,23,42,0.9);color:var(--text);font-size:0.84rem;">
+              <option value="yad2">Yad2 only</option>
+              <option value="madlan">Madlan only</option>
+              <option value="both">Yad2 + Madlan</option>
+            </select>
+          </div>
+          <div>
+            <label for="batch-max-pages">Max result pages per area</label>
+            <input id="batch-max-pages" type="number" placeholder="4" />
+            <p style="font-size:0.74rem;color:var(--text-muted);margin-top:4px;">
+              Higher values scrape more listings but take longer.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted);display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;">
+            <input id="batch-headless" type="checkbox" checked />
+            <span>Run without opening browser windows (recommended)</span>
+          </label>
+        </div>
+
+        <div class="btn-row" style="margin-top:12px;">
+          <button id="batch-run-btn" class="btn">
+            <span>Start batch scrape</span>
+          </button>
+          <div id="batch-status-chip" class="status-chip">
+            <span class="status-dot"></span>
+            <span id="batch-status-text">Idle</span>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <h4 style="margin:0 0 4px;">Batch log &amp; outputs</h4>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 8px;">
+            As the batch runs, you can follow progress here and see where the Excel files are written.
+          </p>
+          <textarea id="batch-log-box" class="log-box" readonly>Ready.</textarea>
+          <div class="footer-row">
+            <div class="muted">
+              Yad2 output: <span id="batch-yad2-out">—</span><br />
+              Madlan output: <span id="batch-madlan-out">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <div id="toast" class="toast">Copied CSV row to clipboard.</div>
@@ -434,7 +704,195 @@
     const metaLast = document.getElementById("meta-last");
     const toast = document.getElementById("toast");
 
+    // Batch UI elements
+    const batchWebsite = document.getElementById("batch-website");
+    const batchMaxPages = document.getElementById("batch-max-pages");
+    const batchHeadless = document.getElementById("batch-headless");
+    const batchRunBtn = document.getElementById("batch-run-btn");
+    const batchStatusChip = document.getElementById("batch-status-chip");
+    const batchStatusText = document.getElementById("batch-status-text");
+    const batchLogBox = document.getElementById("batch-log-box");
+    const batchYad2Out = document.getElementById("batch-yad2-out");
+    const batchMadlanOut = document.getElementById("batch-madlan-out");
+
+    // Preferences elements
+    const prefDefaultRegion = document.getElementById("pref-default-region");
+    const prefListingType = document.getElementById("pref-listing-type");
+    const prefAreasGroup = document.getElementById("pref-areas-group");
+    const prefCitiesGroup = document.getElementById("pref-cities-group");
+    const prefAreasError = document.getElementById("pref-areas-error");
+    const prefCitiesError = document.getElementById("pref-cities-error");
+    const prefPriceMin = document.getElementById("pref-price-min");
+    const prefPriceMax = document.getElementById("pref-price-max");
+    const prefMaxFloor = document.getElementById("pref-max-floor");
+    const prefMinSqm = document.getElementById("pref-min-sqm");
+    const prefLastPubMonth = document.getElementById("pref-last-pub-month");
+    const prefMaxBuildingFloors = document.getElementById("pref-max-building-floors");
+    const prefExcludeCities = document.getElementById("pref-exclude-cities");
+    const prefExcludeNeighborhoods = document.getElementById("pref-exclude-neighborhoods");
+    const prefPrivateOnly = document.getElementById("pref-private-only");
+    const prefYad2PropertyCondition = document.getElementById("pref-yad2-property-condition");
+
+    const prefMadlanLocations = document.getElementById("pref-madlan-locations");
+    const prefMadlanPriceMin = document.getElementById("pref-madlan-price-min");
+    const prefMadlanPriceMax = document.getElementById("pref-madlan-price-max");
+    const prefMadlanRoomsMin = document.getElementById("pref-madlan-rooms-min");
+    const prefMadlanRoomsMax = document.getElementById("pref-madlan-rooms-max");
+    const prefMadlanMaxFloor = document.getElementById("pref-madlan-max-floor");
+    const prefMadlanMinSqm = document.getElementById("pref-madlan-min-sqm");
+    const prefMadlanLastPubMonth = document.getElementById("pref-madlan-last-pub-month");
+    const prefMadlanMaxBuildingFloors = document.getElementById("pref-madlan-max-building-floors");
+    const prefMadlanExcludeCities = document.getElementById("pref-madlan-exclude-cities");
+    const prefMadlanExcludeNeighborhoods = document.getElementById("pref-madlan-exclude-neighborhoods");
+    const prefMadlanPropertyCondition = document.getElementById("pref-madlan-property-condition");
+    const prefMadlanCaptchaMin = document.getElementById("pref-madlan-captcha-min");
+    const prefMadlanOpenDelay = document.getElementById("pref-madlan-open-delay");
+    const prefMadlanPrivateOnly = document.getElementById("pref-madlan-private-only");
+    const prefMadlanPrivateOnlyRoot = document.getElementById("pref-madlan-private-only-root");
+
+    const prefsReloadBtn = document.getElementById("prefs-reload-btn");
+    const prefsSaveBtn = document.getElementById("prefs-save-btn");
+
     let lastCsvLine = null;
+
+    // Predefined Yad2 areas and cities (from assets/yad2_area_IDs.json)
+    const YAD2_AREA_OPTIONS = [
+      "Tel Aviv Area",
+      "Ramat Gan & Givatayim Area",
+      "Bnei Brak & Givat Shmuel Area",
+      "Petah Tikva Area",
+      "Haifa Area",
+      "Krayot Area",
+      "Jerusalem Area",
+      "Holon & Bat Yam Area",
+      "Rishon LeZion Area",
+      "Modiin Area",
+      "Lod & Ramla Area",
+      "Ness Ziona & Rehovot Area",
+      "Netanya Area",
+      "Ramat HaSharon & Herzliya Area",
+      "Eilat & Arava Area",
+      "Zikhron Ya'akov & Hof HaCarmel Area",
+      "Lower Galilee Area",
+    ];
+
+    const YAD2_CITY_OPTIONS = [
+      "Atlit",
+      "Ra'anana",
+      "Kfar Shmaryahu",
+      "Savyon",
+      "Rosh HaAyin",
+      "Ramat HaSharon",
+      "Jerusalem",
+      "Tel Aviv-Yafo",
+      "Bnei Brak",
+      "Bat Yam",
+      "Givatayim",
+      "Herzliya",
+      "Holon",
+      "Netanya",
+      "Lod",
+      "Ramla",
+      "Ness Ziona",
+      "Yavne",
+      "Ashdod",
+      "Ashkelon",
+      "Modi'in-Maccabim-Re'ut",
+      "Modi'in Illit",
+      "Petah Tikva",
+      "Rehovot",
+      "Haifa",
+      "Rishon LeZion",
+      "Kiryat Ata",
+      "Kiryat Bialik",
+      "Ramat Gan",
+      "Hod HaSharon",
+      "Kfar Saba",
+      "Be'er Sheva",
+      "Beit Shemesh",
+      "Tirat HaCarmel",
+      "Zikhron Ya'akov",
+    ];
+
+    const AREA_TO_DISTRICT = {
+      "Tel Aviv Area": "Tel Aviv and surroundings",
+      "Ramat Gan & Givatayim Area": "Tel Aviv and surroundings",
+      "Bnei Brak & Givat Shmuel Area": "Tel Aviv and surroundings",
+      "Petah Tikva Area": "Tel Aviv and surroundings",
+      "Holon & Bat Yam Area": "Tel Aviv and surroundings",
+      "Haifa Area": "Northern Coastal Plain",
+      "Krayot Area": "North and Valleys",
+      "Jerusalem Area": "Jerusalem and surroundings",
+      "Rishon LeZion Area": "Center and Sharon",
+      "Modiin Area": "Center and Sharon",
+      "Lod & Ramla Area": "Center and Sharon",
+      "Ness Ziona & Rehovot Area": "Center and Sharon",
+      "Netanya Area": "Center and Sharon",
+      "Ramat HaSharon & Herzliya Area": "Center and Sharon",
+      "Eilat & Arava Area": "South",
+      "Zikhron Ya'akov & Hof HaCarmel Area": "Northern Coastal Plain",
+      "Lower Galilee Area": "North and Valleys",
+    };
+
+    const CITY_TO_DISTRICT = {
+      "Atlit": "Northern Coastal Plain",
+      "Ra'anana": "Center and Sharon",
+      "Kfar Shmaryahu": "Center and Sharon",
+      "Savyon": "Center and Sharon",
+      "Rosh HaAyin": "Center and Sharon",
+      "Ramat HaSharon": "Center and Sharon",
+      "Jerusalem": "Jerusalem and surroundings",
+      "Tel Aviv-Yafo": "Tel Aviv and surroundings",
+      "Bnei Brak": "Tel Aviv and surroundings",
+      "Bat Yam": "Tel Aviv and surroundings",
+      "Givatayim": "Tel Aviv and surroundings",
+      "Herzliya": "Center and Sharon",
+      "Holon": "Tel Aviv and surroundings",
+      "Netanya": "Center and Sharon",
+      "Lod": "Center and Sharon",
+      "Ramla": "Center and Sharon",
+      "Ness Ziona": "Center and Sharon",
+      "Yavne": "Center and Sharon",
+      "Ashdod": "South",
+      "Ashkelon": "South",
+      "Modi'in-Maccabim-Re'ut": "Center and Sharon",
+      "Modi'in Illit": "Center and Sharon",
+      "Petah Tikva": "Tel Aviv and surroundings",
+      "Rehovot": "Center and Sharon",
+      "Haifa": "Northern Coastal Plain",
+      "Rishon LeZion": "Center and Sharon",
+      "Kiryat Ata": "North and Valleys",
+      "Kiryat Bialik": "North and Valleys",
+      "Ramat Gan": "Tel Aviv and surroundings",
+      "Hod HaSharon": "Center and Sharon",
+      "Kfar Saba": "Center and Sharon",
+      "Be'er Sheva": "South",
+      "Beit Shemesh": "Jerusalem and surroundings",
+      "Tirat HaCarmel": "Northern Coastal Plain",
+      "Zikhron Ya'akov": "Northern Coastal Plain",
+    };
+
+    function renderCheckboxGroup(container, name, options) {
+      container.innerHTML = "";
+      options.forEach((label) => {
+        const id = `${name}-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+        const wrapper = document.createElement("label");
+        wrapper.className = "checkbox-pill";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.name = name;
+        input.id = id;
+        input.value = label;
+        const span = document.createElement("span");
+        span.textContent = label;
+        wrapper.appendChild(input);
+        wrapper.appendChild(span);
+        container.appendChild(wrapper);
+      });
+    }
+
+    renderCheckboxGroup(prefAreasGroup, "pref-area", YAD2_AREA_OPTIONS);
+    renderCheckboxGroup(prefCitiesGroup, "pref-city", YAD2_CITY_OPTIONS);
 
     function detectSourceFromUrl(url) {
       const u = (url || "").toLowerCase();
@@ -472,8 +930,11 @@
     }
 
     function setStatus(state, msg) {
+      // state: "", "success", or "error"
       statusChip.className = "status-chip";
-      statusChip.classList.add(state);
+      if (state === "success" || state === "error") {
+        statusChip.classList.add(state);
+      }
       statusText.textContent = msg;
     }
 
@@ -659,9 +1120,285 @@
       }
     });
 
+    // Batch helpers
+    function setBatchStatus(state, msg) {
+      batchStatusChip.className = "status-chip";
+      if (state === "success" || state === "error") {
+        batchStatusChip.classList.add(state);
+      }
+      batchStatusText.textContent = msg;
+    }
+
+    function clearBatchResult() {
+      batchLogBox.value = "Ready.";
+      batchYad2Out.textContent = "—";
+      batchMadlanOut.textContent = "—";
+    }
+
+    batchRunBtn.addEventListener("click", async () => {
+      clearBatchResult();
+      setBatchStatus("", "Working…");
+      batchLogBox.value = "Starting batch with current preferences…";
+      batchRunBtn.disabled = true;
+      try {
+        const prefsPayload = collectPreferences();
+        const body = {
+          website: batchWebsite.value,
+          max_pages: batchMaxPages.value ? Number(batchMaxPages.value) : 4,
+          headless: batchHeadless.checked,
+          output_dir_yad2: null,
+          output_dir_madlan: null,
+          preferences: prefsPayload,
+        };
+        const resp = await fetch("/api/batch/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          setBatchStatus("error", "Error");
+          batchLogBox.value = (data.log || "") + (data.error ? "\n\nError: " + data.error : "");
+        } else {
+          setBatchStatus("success", "OK");
+          batchLogBox.value = data.log || "Batch completed.";
+        }
+        batchYad2Out.textContent = data.yad2_output_dir || "—";
+        batchMadlanOut.textContent = data.madlan_output_dir || "—";
+      } catch (err) {
+        console.error(err);
+        setBatchStatus("error", "Request failed");
+        batchLogBox.value = "Request failed: " + err;
+      } finally {
+        batchRunBtn.disabled = false;
+      }
+    });
+
+    // Preferences helpers
+    function splitCsv(text) {
+      if (!text) return [];
+      return text
+        .split(",")
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0);
+    }
+
+    function joinCsv(arr) {
+      if (!arr || !arr.length) return "";
+      return arr.join(", ");
+    }
+
+    function toNumOrNull(value) {
+      if (value === "" || value === null || value === undefined) return null;
+      const n = Number(value);
+      return Number.isNaN(n) ? null : n;
+    }
+
+    function setGroupSelection(name, values, errorElem) {
+      const set = new Set(values || []);
+      const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+      const unknown = new Set(set);
+      checkboxes.forEach((cb) => {
+        if (set.has(cb.value)) {
+          cb.checked = true;
+          unknown.delete(cb.value);
+        } else {
+          cb.checked = false;
+        }
+      });
+      if (errorElem) {
+        if (unknown.size > 0) {
+          errorElem.textContent =
+            "Some saved values are not in the supported list: " + Array.from(unknown).join(", ");
+        } else {
+          errorElem.textContent = "";
+        }
+      }
+    }
+
+    function getGroupSelection(name) {
+      return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(
+        (cb) => cb.value
+      );
+    }
+
+    function inferDistrictFromSelection() {
+      const areaValues = getGroupSelection("pref-area");
+      const cityValues = getGroupSelection("pref-city");
+      const inferred = new Set();
+      areaValues.forEach((a) => {
+        const d = AREA_TO_DISTRICT[a];
+        if (d) inferred.add(d);
+      });
+      cityValues.forEach((c) => {
+        const d = CITY_TO_DISTRICT[c];
+        if (d) inferred.add(d);
+      });
+      return Array.from(inferred);
+    }
+
+    function maybeAutoFixDistrict() {
+      const inferred = inferDistrictFromSelection();
+      if (!inferred.length) return;
+      const chosen = inferred[0];
+      const current = prefDefaultRegion.value || "";
+      if (!current) {
+        prefDefaultRegion.value = chosen;
+        return;
+      }
+      if (current !== chosen && inferred.length === 1) {
+        prefDefaultRegion.value = chosen;
+        showToast(`Adjusted region to "${chosen}" to match your areas/cities.`);
+      }
+    }
+
+    function fillPreferences(data) {
+      const scraper = (data && data.scraper) || {};
+      const madlan = (data && data.madlan) || {};
+
+      prefDefaultRegion.value = scraper.default_region || "";
+      prefListingType.value = scraper.listing_type || "";
+      setGroupSelection("pref-area", scraper.areas || [], prefAreasError);
+      setGroupSelection("pref-city", scraper.cities || [], prefCitiesError);
+      prefPriceMin.value = scraper.price_min != null ? scraper.price_min : "";
+      prefPriceMax.value = scraper.price_max != null ? scraper.price_max : "";
+      prefMaxFloor.value = scraper.max_floor != null ? scraper.max_floor : "";
+      prefMinSqm.value = scraper.min_square_meters != null ? scraper.min_square_meters : "";
+      prefLastPubMonth.value = scraper.last_publication_month != null ? scraper.last_publication_month : "";
+      prefMaxBuildingFloors.value = scraper.max_building_floors != null ? scraper.max_building_floors : "";
+      prefExcludeCities.value = joinCsv(scraper.exclude_cities || []);
+      prefExcludeNeighborhoods.value = joinCsv(scraper.exclude_neighborhoods || []);
+      prefPrivateOnly.checked = !!scraper.private_only;
+      prefYad2PropertyCondition.value = joinCsv(scraper.property_condition || []);
+
+      prefMadlanLocations.value = joinCsv(madlan.locations || []);
+      prefMadlanPriceMin.value = madlan.price_min != null ? madlan.price_min : "";
+      prefMadlanPriceMax.value = madlan.price_max != null ? madlan.price_max : "";
+      prefMadlanRoomsMin.value = madlan.rooms_min != null ? madlan.rooms_min : "";
+      prefMadlanRoomsMax.value = madlan.rooms_max != null ? madlan.rooms_max : "";
+      prefMadlanMaxFloor.value = madlan.max_floor != null ? madlan.max_floor : "";
+      prefMadlanMinSqm.value = madlan.min_square_meters != null ? madlan.min_square_meters : "";
+      prefMadlanLastPubMonth.value = madlan.last_publication_month != null ? madlan.last_publication_month : "";
+      prefMadlanMaxBuildingFloors.value = madlan.max_building_floors != null ? madlan.max_building_floors : "";
+      prefMadlanExcludeCities.value = joinCsv(madlan.exclude_cities || []);
+      prefMadlanExcludeNeighborhoods.value = joinCsv(madlan.exclude_neighborhoods || []);
+      prefMadlanPropertyCondition.value = joinCsv(madlan.property_condition || []);
+      prefMadlanCaptchaMin.value = madlan.captcha_avoidance_min != null ? madlan.captcha_avoidance_min : "";
+      prefMadlanOpenDelay.value = madlan.listing_open_delay_sec != null ? madlan.listing_open_delay_sec : "";
+      prefMadlanPrivateOnly.checked = !!madlan.private_only_madlan;
+      prefMadlanPrivateOnlyRoot.checked = !!madlan.private_only;
+      maybeAutoFixDistrict();
+    }
+
+    async function loadPreferences() {
+      try {
+        const resp = await fetch("/api/preferences");
+        const json = await resp.json();
+        if (!json.success) {
+          console.error("Failed to load preferences:", json.error);
+          return;
+        }
+        fillPreferences(json.data || {});
+      } catch (e) {
+        console.error("Error loading preferences:", e);
+      }
+    }
+
+    function collectPreferences() {
+      const scraper = {};
+      if (prefDefaultRegion.value) scraper.default_region = prefDefaultRegion.value.trim();
+      if (prefListingType.value) scraper.listing_type = prefListingType.value.trim();
+      scraper.areas = getGroupSelection("pref-area");
+      scraper.cities = getGroupSelection("pref-city");
+      const sPriceMin = toNumOrNull(prefPriceMin.value);
+      const sPriceMax = toNumOrNull(prefPriceMax.value);
+      const sMaxFloor = toNumOrNull(prefMaxFloor.value);
+      const sMinSqm = toNumOrNull(prefMinSqm.value);
+      const sLastPub = toNumOrNull(prefLastPubMonth.value);
+      const sMaxBld = toNumOrNull(prefMaxBuildingFloors.value);
+      if (sPriceMin != null) scraper.price_min = sPriceMin;
+      if (sPriceMax != null) scraper.price_max = sPriceMax;
+      if (sMaxFloor != null) scraper.max_floor = sMaxFloor;
+      if (sMinSqm != null) scraper.min_square_meters = sMinSqm;
+      if (sLastPub != null) scraper.last_publication_month = sLastPub;
+      if (sMaxBld != null) scraper.max_building_floors = sMaxBld;
+      scraper.exclude_cities = splitCsv(prefExcludeCities.value);
+      scraper.exclude_neighborhoods = splitCsv(prefExcludeNeighborhoods.value);
+      scraper.private_only = !!prefPrivateOnly.checked;
+      scraper.property_condition = splitCsv(prefYad2PropertyCondition.value).map((v) => {
+        const n = Number(v);
+        return Number.isNaN(n) ? v : n;
+      });
+
+      const madlan = {};
+      madlan.locations = splitCsv(prefMadlanLocations.value);
+      const mPriceMin = toNumOrNull(prefMadlanPriceMin.value);
+      const mPriceMax = toNumOrNull(prefMadlanPriceMax.value);
+      const mRoomsMin = toNumOrNull(prefMadlanRoomsMin.value);
+      const mRoomsMax = toNumOrNull(prefMadlanRoomsMax.value);
+      const mMaxFloor = toNumOrNull(prefMadlanMaxFloor.value);
+      const mMinSqm = toNumOrNull(prefMadlanMinSqm.value);
+      const mLastPub = toNumOrNull(prefMadlanLastPubMonth.value);
+      const mMaxBld = toNumOrNull(prefMadlanMaxBuildingFloors.value);
+      if (mPriceMin != null) madlan.price_min = mPriceMin;
+      if (mPriceMax != null) madlan.price_max = mPriceMax;
+      if (mRoomsMin != null) madlan.rooms_min = mRoomsMin;
+      if (mRoomsMax != null) madlan.rooms_max = mRoomsMax;
+      if (mMaxFloor != null) madlan.max_floor = mMaxFloor;
+      if (mMinSqm != null) madlan.min_square_meters = mMinSqm;
+      if (mLastPub != null) madlan.last_publication_month = mLastPub;
+      if (mMaxBld != null) madlan.max_building_floors = mMaxBld;
+      madlan.exclude_cities = splitCsv(prefMadlanExcludeCities.value);
+      madlan.exclude_neighborhoods = splitCsv(prefMadlanExcludeNeighborhoods.value);
+      madlan.property_condition = splitCsv(prefMadlanPropertyCondition.value);
+      const mCaptcha = toNumOrNull(prefMadlanCaptchaMin.value);
+      const mDelay = toNumOrNull(prefMadlanOpenDelay.value);
+      if (mCaptcha != null) madlan.captcha_avoidance_min = mCaptcha;
+      if (mDelay != null) madlan.listing_open_delay_sec = mDelay;
+      madlan.private_only_madlan = !!prefMadlanPrivateOnly.checked;
+      madlan.private_only = !!prefMadlanPrivateOnlyRoot.checked;
+
+      return { scraper, madlan };
+    }
+
+    prefsReloadBtn.addEventListener("click", () => {
+      loadPreferences();
+    });
+
+    // When areas/cities change, keep district in sync when possible
+    prefAreasGroup.addEventListener("change", () => {
+      maybeAutoFixDistrict();
+    });
+    prefCitiesGroup.addEventListener("change", () => {
+      maybeAutoFixDistrict();
+    });
+
+    prefsSaveBtn.addEventListener("click", async () => {
+      const payload = collectPreferences();
+      try {
+        const resp = await fetch("/api/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await resp.json();
+        if (!json.success) {
+          console.error("Failed to save preferences:", json.error);
+          showToast("Failed to save preferences.");
+          return;
+        }
+        fillPreferences(json.data || payload);
+        showToast("Preferences saved.");
+      } catch (e) {
+        console.error("Error saving preferences:", e);
+        showToast("Failed to save preferences.");
+      }
+    });
+
     // Initial state
     updateSourceIndicators("");
     clearResult();
+    loadPreferences();
   </script>
 </body>
 </html>

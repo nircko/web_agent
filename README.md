@@ -281,6 +281,11 @@ The scraper loads preferences from **`scraper_preferences.json`** in the project
 
 CLI `--locations` overrides the areas/cities from this file. Exclude lists can also be set in `config/yad2_config.json` (merged).
 
+When using the **web UI**, there are two ways these preferences are applied:
+
+- **Defaults (JSON on disk)**: Editing `scraper_preferences.json` / `madlan_preferences.json` directly, or clicking **Save preferences for future runs** in the UI, updates the baseline defaults. These are used by CLI runs and as the starting point for the UI.
+- **Inline overrides (per batch run)**: Clicking **Start batch scrape** in the UI sends the current on‑screen preferences inline to the backend. The batch endpoints pass them to the pipelines via environment variables (`SCRAPER_PREFERENCES_INLINE` for Yad2, `MADLAN_PREFERENCES_INLINE` for Madlan), so that run uses the UI state **without modifying** the JSON files on disk.
+
 #### Madlan (madlan.co.il) scraper
 
 A separate pipeline scrapes **Madlan** with the same output shape (CSV, images, debug, fixed Hebrew XLSX). It uses the **`madlan`** section in `scraper_preferences.json` or a standalone **`madlan_preferences.json`**.
