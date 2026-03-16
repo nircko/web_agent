@@ -9,6 +9,8 @@ openrouteservice
 beautifulsoup4
 lxml
 rich
+fastapi
+uvicorn
 ipykernel
 openpyxl
 chardet

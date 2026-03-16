@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Listing Inspector (Yad2 / Madlan)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #050816;
+      --bg-card: #0f172a;
+      --border-subtle: #1e293b;
+      --accent: #22c55e;
+      --accent-soft: rgba(34, 197, 94, 0.1);
+      --accent-2: #0ea5e9;
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --danger: #f97373;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #0b1120 0, #020617 45%, #020617 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+    .page {
+      width: 100%;
+      max-width: 1100px;
+      margin: 24px;
+      padding: 24px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(15,23,42,0.96), rgba(15,23,42,0.92));
+      border: 1px solid rgba(148,163,184,0.25);
+      box-shadow: 0 20px 60px rgba(15,23,42,0.9);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .title-group h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      letter-spacing: 0.04em;
+    }
+    .title-group p {
+      margin: 4px 0 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 60%);
+    }
+    .pill span.dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.25);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    .card {
+      border-radius: 18px;
+      padding: 16px 18px 18px;
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 55%), #020617;
+      border: 1px solid rgba(148,163,184,0.35);
+      box-shadow: 0 14px 30px rgba(15,23,42,0.85);
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e5e7eb;
+    }
+    .card p {
+      margin: 4px 0;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+      color: var(--text-muted);
+    }
+    input[type="text"] {
+      width: 100%;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.5);
+      background: rgba(15,23,42,0.9);
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 0.86rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 1px rgba(56,189,248,0.7);
+      background: rgba(15,23,42,1);
+    }
+    .url-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .source-tag {
+      min-width: 92px;
+      text-align: center;
+      font-size: 0.75rem;
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      background: rgba(15,23,42,0.9);
+      color: var(--text-muted);
+    }
+    .source-tag.yad2 {
+      border-color: rgba(250,204,21,0.7);
+      background: radial-gradient(circle at top, rgba(250,204,21,0.18), rgba(15,23,42,0.95));
+      color: #facc15;
+    }
+    .source-tag.madlan {
+      border-color: rgba(56,189,248,0.7);
+      background: radial-gradient(circle at top, rgba(56,189,248,0.18), rgba(15,23,42,0.95));
+      color: #38bdf8;
+    }
+    .btn-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      gap: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #22c55e, #4ade80);
+      color: #022c22;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(34,197,94,0.5);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 14px 35px rgba(34,197,94,0.7);
+    }
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: 0 8px 20px rgba(34,197,94,0.6);
+    }
+    .btn.secondary {
+      background: rgba(15,23,42,0.9);
+      color: var(--text);
+      border: 1px solid rgba(148,163,184,0.5);
+      box-shadow: none;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      color: var(--text-muted);
+      background: rgba(15,23,42,0.9);
+    }
+    .status-chip.success {
+      border-color: rgba(34,197,94,0.7);
+      color: #bbf7d0;
+      background: rgba(22,163,74,0.18);
+    }
+    .status-chip.error {
+      border-color: rgba(248,113,113,0.8);
+      color: #fecaca;
+      background: rgba(127,29,29,0.4);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--text-muted);
+    }
+    .status-chip.success .status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.25);
+    }
+    .status-chip.error .status-dot {
+      background: #f97373;
+      box-shadow: 0 0 0 4px rgba(248,113,113,0.25);
+    }
+    textarea.log-box {
+      width: 100%;
+      min-height: 100px;
+      max-height: 200px;
+      border-radius: 14px;
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.95));
+      color: var(--text-muted);
+      padding: 10px 12px;
+      font-size: 0.78rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      resize: vertical;
+      outline: none;
+    }
+    textarea.log-box:focus {
+      border-color: rgba(56,189,248,0.8);
+      box-shadow: 0 0 0 1px rgba(56,189,248,0.5);
+    }
+    .result-card {
+      border-radius: 18px;
+      padding: 16px 18px 18px;
+      background: linear-gradient(145deg, rgba(15,23,42,0.97), rgba(15,23,42,0.92));
+      border: 1px solid rgba(148,163,184,0.35);
+    }
+    .result-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .price-main {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #bbf7d0;
+    }
+    .price-main span.currency {
+      font-size: 0.85rem;
+      color: #6ee7b7;
+      margin-left: 4px;
+    }
+    .headline-line {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px 16px;
+      margin-top: 8px;
+    }
+    .field-chip {
+      padding: 6px 10px;
+      border-radius: 12px;
+      background: rgba(15,23,42,0.95);
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 0.78rem;
+    }
+    .field-label {
+      display: block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .field-value {
+      font-size: 0.88rem;
+    }
+    .field-value.strong {
+      color: #e5e7eb;
+      font-weight: 600;
+    }
+    .desc-block {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(148,163,184,0.4);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      max-height: 160px;
+      overflow: auto;
+    }
+    .desc-block strong {
+      color: #e5e7eb;
+    }
+    .footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      gap: 8px;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+    }
+    .toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(22,163,74,0.95);
+      color: #ecfdf5;
+      font-size: 0.78rem;
+      box-shadow: 0 12px 30px rgba(22,163,74,0.7);
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .muted {
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="title-group">
+        <h1>Listing Inspector</h1>
+        <p>Paste a Yad2 / Madlan listing URL, see a clean summary, and copy the CSV row for Excel.</p>
+      </div>
+      <div class="pill">
+        <span class="dot"></span>
+        <span>Local-only &bull; runs on your machine</span>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Left: input & log -->
+      <div class="card">
+        <h2>1. Input &amp; status</h2>
+        <p>Enter a listing URL from <strong>yad2.co.il</strong> or <strong>madlan.co.il</strong>, then click Analyze.</p>
+
+        <label for="url-input">Listing URL</label>
+        <div class="url-row">
+          <input id="url-input" type="text" placeholder="https://www.yad2.co.il/..." />
+          <div id="source-tag" class="source-tag">Unknown</div>
+        </div>
+
+        <div class="btn-row">
+          <button id="analyze-btn" class="btn">
+            <span>Analyze</span>
+          </button>
+          <div id="status-chip" class="status-chip">
+            <span class="status-dot"></span>
+            <span id="status-text">Idle</span>
+          </div>
+        </div>
+
+        <p style="margin-top:12px;margin-bottom:4px;font-size:0.78rem;color:var(--text-muted);">
+          Log
+        </p>
+        <textarea id="log-box" class="log-box" readonly>Ready.</textarea>
+      </div>
+
+      <!-- Right: result summary -->
+      <div class="result-card">
+        <div class="result-header">
+          <div>
+            <div id="price-main" class="price-main muted">No listing yet</div>
+            <div id="headline-line" class="headline-line"></div>
+          </div>
+          <div id="source-badge" class="source-tag">Source: &mdash;</div>
+        </div>
+
+        <div id="field-grid" class="field-grid">
+          <!-- Filled by JS -->
+        </div>
+
+        <div id="desc-block" class="desc-block" style="display:none;"></div>
+
+        <div class="footer-row">
+          <button id="copy-csv-btn" class="btn secondary" disabled>
+            Copy CSV row for Excel
+          </button>
+          <div id="meta-line">
+            <span class="muted">First published: <span id="meta-first">—</span></span>
+            <span class="muted" style="margin-left:8px;">Last update: <span id="meta-last">—</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Copied CSV row to clipboard.</div>
+
+  <script>
+    const urlInput = document.getElementById("url-input");
+    const analyzeBtn = document.getElementById("analyze-btn");
+    const sourceTag = document.getElementById("source-tag");
+    const sourceBadge = document.getElementById("source-badge");
+    const statusChip = document.getElementById("status-chip");
+    const statusText = document.getElementById("status-text");
+    const logBox = document.getElementById("log-box");
+    const priceMain = document.getElementById("price-main");
+    const headlineLine = document.getElementById("headline-line");
+    const fieldGrid = document.getElementById("field-grid");
+    const descBlock = document.getElementById("desc-block");
+    const copyCsvBtn = document.getElementById("copy-csv-btn");
+    const metaFirst = document.getElementById("meta-first");
+    const metaLast = document.getElementById("meta-last");
+    const toast = document.getElementById("toast");
+
+    let lastCsvLine = null;
+
+    function detectSourceFromUrl(url) {
+      const u = (url || "").toLowerCase();
+      if (!u) return null;
+      if (u.includes("yad2.co.il")) return "yad2";
+      if (u.includes("madlan.co.il")) return "madlan";
+      return null;
+    }
+
+    function updateSourceIndicators(url) {
+      const src = detectSourceFromUrl(url);
+      sourceTag.className = "source-tag";
+      sourceBadge.className = "source-tag";
+      if (src === "yad2") {
+        sourceTag.classList.add("yad2");
+        sourceBadge.classList.add("yad2");
+        sourceTag.textContent = "Yad2";
+        sourceBadge.textContent = "Source: Yad2";
+      } else if (src === "madlan") {
+        sourceTag.classList.add("madlan");
+        sourceBadge.classList.add("madlan");
+        sourceTag.textContent = "Madlan";
+        sourceBadge.textContent = "Source: Madlan";
+      } else {
+        sourceTag.textContent = "Unknown";
+        sourceBadge.textContent = "Source: —";
+      }
+    }
+
+    function appendLog(line) {
+      const now = new Date();
+      const ts = now.toLocaleTimeString();
+      logBox.value += `\n[${ts}] ${line}`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function setStatus(state, msg) {
+      statusChip.className = "status-chip";
+      statusChip.classList.add(state);
+      statusText.textContent = msg;
+    }
+
+    function clearResult() {
+      priceMain.textContent = "No listing yet";
+      priceMain.classList.add("muted");
+      headlineLine.textContent = "";
+      fieldGrid.innerHTML = "";
+      descBlock.style.display = "none";
+      descBlock.textContent = "";
+      metaFirst.textContent = "—";
+      metaLast.textContent = "—";
+      copyCsvBtn.disabled = true;
+      lastCsvLine = null;
+    }
+
+    function humanBool(v) {
+      if (v === true) return "Yes";
+      if (v === false) return "No";
+      return "—";
+    }
+
+    function renderResult(data) {
+      const rec = data.record || {};
+      const price = rec.price_ils;
+      if (typeof price === "number") {
+        const formatted = Math.round(price).toLocaleString("en-US").replace(/,/g, " ");
+        priceMain.textContent = formatted + " ₪";
+        priceMain.classList.remove("muted");
+      } else {
+        priceMain.textContent = "Price not available";
+        priceMain.classList.add("muted");
+      }
+
+      const parts = [];
+      if (rec.rooms) parts.push(`${rec.rooms} rooms`);
+      if (rec.built_sqm) parts.push(`${rec.built_sqm} m²`);
+      if (rec.city) parts.push(`in ${rec.city}`);
+      if (rec.floor_current != null) {
+        const total = rec.floor_total != null ? `/${rec.floor_total}` : "";
+        parts.push(`floor ${rec.floor_current}${total}`);
+      }
+      headlineLine.textContent = parts.join(" · ");
+
+      fieldGrid.innerHTML = "";
+      const groups = [
+        {
+          label: "Property",
+          items: [
+            ["Type", rec.property_type],
+            ["Condition", rec.property_condition_label],
+            ["Year built", rec.year_built],
+          ],
+        },
+        {
+          label: "Location",
+          items: [
+            ["Address", rec.full_address_best || rec.street_name || "—"],
+            ["Neighborhood", rec.neighborhood],
+            ["City", rec.city],
+          ],
+        },
+        {
+          label: "Seller",
+          items: [
+            ["Name", rec.seller_name],
+            ["Type", rec.seller_type],
+            ["Phone", rec.seller_phone_normalized || rec.seller_phone_raw],
+          ],
+        },
+        {
+          label: "Meta",
+          items: [
+            ["Scraped", rec.scrape_timestamp_utc],
+            ["Confidence", rec.extraction_confidence_score],
+            ["Missing reason", rec.missing_reason_code || "—"],
+          ],
+        },
+        {
+          label: "Amenities",
+          items: [
+            ["Elevator", humanBool(rec.elevator)],
+            ["Mamad", humanBool(rec.mamad)],
+            ["Balcony", rec.balcony_count],
+            ["Parking", rec.parking_count],
+          ],
+        },
+      ];
+
+      groups.forEach(group => {
+        group.items.forEach(([label, value]) => {
+          const chip = document.createElement("div");
+          chip.className = "field-chip";
+          const lab = document.createElement("span");
+          lab.className = "field-label";
+          lab.textContent = group.label + " · " + label;
+          const val = document.createElement("div");
+          val.className = "field-value";
+          if (value === null || value === undefined || value === "") {
+            val.textContent = "—";
+            val.classList.add("muted");
+          } else {
+            val.textContent = String(value);
+            val.classList.add("strong");
+          }
+          chip.appendChild(lab);
+          chip.appendChild(val);
+          fieldGrid.appendChild(chip);
+        });
+      });
+
+      const desc = rec.description_clean || rec.description_raw;
+      if (desc) {
+        descBlock.style.display = "block";
+        descBlock.innerHTML = `<strong>Description</strong><br>${desc}`;
+      } else {
+        descBlock.style.display = "none";
+      }
+
+      metaFirst.textContent = data.first_published_date || "—";
+      metaLast.textContent = data.last_update_date || "—";
+
+      lastCsvLine = data.csv_line || null;
+      copyCsvBtn.disabled = !lastCsvLine;
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => {
+        toast.classList.remove("show");
+      }, 2200);
+    }
+
+    urlInput.addEventListener("input", () => {
+      updateSourceIndicators(urlInput.value);
+    });
+
+    analyzeBtn.addEventListener("click", async () => {
+      const url = urlInput.value.trim();
+      clearResult();
+      updateSourceIndicators(url);
+      if (!url) {
+        appendLog("Please enter a URL.");
+        setStatus("error", "URL required");
+        return;
+      }
+      setStatus("", "Working…");
+      appendLog("Sending request to backend…");
+      analyzeBtn.disabled = true;
+      try {
+        const resp = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          appendLog("Error: " + (data.error || "Unknown error"));
+          setStatus("error", "Error");
+          return;
+        }
+        appendLog("Success. Listing analyzed.");
+        setStatus("success", "OK");
+        renderResult(data);
+      } catch (err) {
+        console.error(err);
+        appendLog("Request failed: " + err);
+        setStatus("error", "Request failed");
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    });
+
+    copyCsvBtn.addEventListener("click", async () => {
+      if (!lastCsvLine) return;
+      try {
+        await navigator.clipboard.writeText(lastCsvLine);
+        showToast("Copied CSV row to clipboard.");
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to copy CSV row.");
+      }
+    });
+
+    // Initial state
+    updateSourceIndicators("");
+    clearResult();
+  </script>
+</body>
+</html>
+
+

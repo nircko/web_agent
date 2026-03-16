@@ -1,6 +1,70 @@
-## Yad2 Real Estate Scraper
+## Yad2 / Madlan Real Estate Scraper & Viewer
 
-This project implements an end‑to‑end data collection pipeline that:
+This project implements:
+
+- A Yad2 scraper pipeline (CSV, images, Excel, PowerPoint).
+- A Madlan scraper pipeline (same output shape as Yad2).
+- A **friendly web UI** (“Listing Inspector”) where you paste a single listing URL and get a clean summary + one-click CSV row for Excel.
+
+---
+
+### 0. Quick start for non‑technical users
+
+You only need three basic steps the first time:
+
+1. **Install Python 3.10+** (if you don’t already have it)
+   - On Windows or macOS, download from `https://www.python.org/downloads/` and install.
+
+2. **Install the project dependencies**
+   - Open **Terminal** (macOS) or **PowerShell** (Windows).
+   - Go to the project folder (replace the path with where you cloned/unzipped `web_agent`):
+
+     ```bash
+     cd /path/to/web_agent
+     ```
+
+   - Install required Python packages:
+
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+3. **Run the Listing Inspector web app**
+
+   You have a few options; pick what’s easiest for you:
+
+   - **Option A – Double‑click the Python launcher (works on both macOS and Windows)**  
+     In the project folder, double‑click:
+     - `launch_web_ui.py`  
+       (On macOS this usually opens with *Python Launcher*; on Windows with the installed Python.)
+
+   - **Option B – Double‑click the OS‑specific script**
+     - macOS: `launch_web_ui_macos.command` (may require one‑time permission via right‑click → Open).
+     - Windows: `launch_web_ui_windows.bat`.
+
+   All options start the web UI at:
+
+   - `http://127.0.0.1:8000/`
+
+   On that page you can:
+
+   - Paste a **Yad2** or **Madlan** listing URL.
+   - See the source auto‑detected (Yad2 / Madlan).
+   - Click **Analyze** to:
+     - See a **log** of what’s happening (status + messages).
+     - Get a **formatted summary card**: price, rooms, m², floor, city, seller, amenities, etc.
+     - See **first published** and **last update** dates (when available from the source HTML).
+   - Click **“Copy CSV row for Excel”** to put a single CSV row on your clipboard and paste it as a new row in an existing Excel sheet.
+
+You can keep this web app open while you click multiple listings in your browser and paste each URL into the input box.
+
+If you want to run the **full batch scraper** (many listings at once), continue reading below.
+
+---
+
+## 1. Pipelines overview (Yad2)
+
+The Yad2 pipeline implements an end‑to‑end data collection flow that:
 
 - Scrapes Yad2 real estate **sale** listings in the **Center & Sharon** region.
 - Applies the required filters (price, floor, size, condition).
@@ -18,7 +82,7 @@ This project implements an end‑to‑end data collection pipeline that:
   - `output/debug/`
   - `output/logs/`
 
-### 1. Easy installation (recommended)
+### 2. Easy installation (recommended)
 
 The simplest way to install everything is to use the provided setup scripts.
 They will:
@@ -45,18 +109,18 @@ They will:
 2. Make the script executable once:
 
    ```bash
-   chmod +x scripts/setup_yad2_scraper_macos.sh
+   chmod +x cli_tools/setup_yad2_scraper_macos.sh
    ```
 
 3. Run:
 
    ```bash
-   ./scripts/setup_yad2_scraper_macos.sh
+   ./cli_tools/setup_yad2_scraper_macos.sh
    ```
 
 These scripts are **idempotent** – you can re-run them if something goes wrong.
 
-### 2. Environment variables
+### 3. Environment variables
 
 Create a `.env` file in the project root:
 
@@ -68,7 +132,7 @@ GEOCODING_EMAIL=your_email_for_nominatim_header
 - **`ORS_API_KEY`**: Free key from OpenRouteService.
 - **`GEOCODING_EMAIL`**: Used in Nominatim headers as a contact.
 
-### 3. How to run
+### 4. How to run the Yad2 scraper
 
 After the setup script has completed successfully, use one of the options below. The pipeline prints a **colored summary** of your input filters and search plan (e.g. when the search is split by district) before starting.
 
@@ -82,20 +146,20 @@ After the setup script has completed successfully, use one of the options below.
    ```
 2. First time only, make the script executable:
    ```bash
-   chmod +x scripts/run_yad2_macos.sh
+   chmod +x cli_tools/run_yad2_macos.sh
    ```
 3. Run:
    ```bash
-   ./scripts/run_yad2_macos.sh
+   ./cli_tools/run_yad2_macos.sh
    ```
 
 **Windows:**
 
 1. Open **File Explorer** and go to the project folder (e.g. `C:\Users\YourName\Documents\web_agent`).
-2. Open the `scripts` folder and **double‑click** `run_yad2_windows.bat`  
+2. Open the `cli_tools` folder and **double‑click** `run_yad2_windows.bat`  
    **or** open **PowerShell** in the project folder and run:
    ```powershell
-   .\scripts\run_yad2_windows.bat
+   .\cli_tools\run_yad2_windows.bat
    ```
 3. The script will ask for output folder, number of pages, headless/visible browser, and areas. Press Enter to accept defaults.
 
@@ -163,7 +227,7 @@ Run **`python yad2_pipeline.py --help`** for full CLI options and descriptions.
 
 The pipeline reads search and filter settings from **`scraper_preferences.json`** in the project root (see Preferences below). It visits the configured pages per area, scrapes and enriches listings, persists progress after each listing, and writes logs to `output/logs/` and debug artifacts to `output/debug/`.
 
-### 4. Summary PowerPoint
+### 5. Summary PowerPoint
 
 The pipeline saves **debug PNG and HTML only for listings that pass all filters** and are written to `listings_full.csv`. You can then generate a summary PowerPoint from an output directory.
 
@@ -172,14 +236,14 @@ The pipeline saves **debug PNG and HTML only for listings that pass all filters*
 ```bash
 # From project root (Mac/Linux)
 source .venv/bin/activate
-python scripts/build_summary_pptx.py --output-dir output
+python cli_tools/build_summary_pptx.py --output-dir output
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python scripts/build_summary_pptx.py --output-dir output
+python cli_tools/build_summary_pptx.py --output-dir output
 ```
 
 Optional: `--out-pptx path/to/summary.pptx` (default: `<output-dir>/summary_listings.pptx`).
@@ -194,7 +258,7 @@ Optional: `--out-pptx path/to/summary.pptx` (default: `<output-dir>/summary_list
 
 Requires `listings_full.csv`, and optionally `output/debug/` (PNG per exported listing) and `output/images/<listing_id>/` (downloaded images).
 
-### 5. Preferences (`scraper_preferences.json`)
+### 6. Preferences (`scraper_preferences.json`)
 
 The scraper loads preferences from **`scraper_preferences.json`** in the project root. You can also use `config/filter_preferences.json` (nested format); the loader falls back to it if the root file is missing.
 
@@ -256,12 +320,12 @@ The Madlan URL filter string is built from these (see [Madlan search URL](https:
 **Location data (assets/)** — All city and location lookup JSON files live under **`assets/`**: `unified_location_names.json`, `yad2_area_IDs.json`, `madlan_config.json`. To add a new city so it works with `--locations` and both pipelines, use the translation helper:
 
 ```bash
-python scripts/add_city_to_lookups.py "City Name English" "District" YAD2_CITY_ID [--madlan-hebrew "עיר בעברית"]
+python cli_tools/add_city_to_lookups.py "City Name English" "District" YAD2_CITY_ID [--madlan-hebrew "עיר בעברית"]
 ```
 
 Example: `python scripts/add_city_to_lookups.py "Tirat Carmel" "Northern Coastal Plain" 2100 --madlan-hebrew "טירת כרמל"`. This updates `assets/yad2_area_IDs.json` (city + district), `assets/unified_location_names.json` (locations + aliases), and `assets/madlan_config.json` (location_slugs) if `--madlan-hebrew` is given. District must be one of: Center and Sharon, Jerusalem and surroundings, North and Valleys, Northern Coastal Plain, South, Tel Aviv and surroundings.
 
-### 6. Outputs
+### 7. Outputs
 
 - **CSV**: `output/listings_full.csv`
 - **Run summary**: `output/run_summary.json`
@@ -273,7 +337,7 @@ For common problems and fixes, see the dedicated troubleshooting guide:
 
 - `TROUBLESHOOTING.md`
 
-### 7. Building a standalone Windows EXE (advanced)
+### 8. Building a standalone Windows EXE (advanced)
 
 If you want a single `.exe` file that includes Python and all dependencies for easier distribution on Windows:
 
