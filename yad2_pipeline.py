@@ -114,21 +114,33 @@ def _normalize_preferences(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_filter_preferences(project_root: Optional[Path] = None) -> Dict[str, Any]:
-    """Load preferences from project root (scraper_preferences.json) or config/filter_preferences.json.
-    Uses user-friendly flat format when present; district in the file is only used when areas and cities
-    are both empty—otherwise district is always deduced from the areas/cities lists."""
-    root = project_root or Path(__file__).resolve().parent
-    for path in [root / "scraper_preferences.json"]:
-        if path.exists():
-            try:
-                raw = path.read_text(encoding="utf-8")
-                data = json.loads(raw)
-                if not isinstance(data, dict):
-                    return dict(DEFAULT_FILTER_PREFERENCES)
+    """Load preferences for Yad2 scraping.
+
+    Priority:
+    1. Inline JSON from SCRAPER_PREFERENCES_INLINE (used by the web UI for this run only)
+    2. scraper_preferences.json on disk (CLI / default)
+    """
+    inline = os.getenv("SCRAPER_PREFERENCES_INLINE")
+    if inline:
+        try:
+            data = json.loads(inline)
+            if isinstance(data, dict):
                 return _normalize_preferences(data)
-            except Exception as e:
-                logging.warning("Failed to load preferences from %s: %s, using defaults.", path, e)
+        except Exception as e:
+            logging.warning("Failed to load SCRAPER_PREFERENCES_INLINE: %s; falling back to file.", e)
+
+    root = project_root or Path(__file__).resolve().parent
+    path = root / "scraper_preferences.json"
+    if path.exists():
+        try:
+            raw = path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
                 return dict(DEFAULT_FILTER_PREFERENCES)
+            return _normalize_preferences(data)
+        except Exception as e:
+            logging.warning("Failed to load preferences from %s: %s, using defaults.", path, e)
+            return dict(DEFAULT_FILTER_PREFERENCES)
     return dict(DEFAULT_FILTER_PREFERENCES)
 
 
