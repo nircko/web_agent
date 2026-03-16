@@ -1,12 +1,7 @@
+from __future__ import annotations
+
 """
-Build Madlan (madlan.co.il) search URLs for for-sale listings.
-
-URL shape: https://www.madlan.co.il/for-sale/{location_slugs}?filters={filter_string}&tracking_search_source=filter_apply
-
-Filter string (underscore-separated segments):
-  _priceMin-priceMax_roomsMin-roomsMax_condition_sellerType____-maxFloor_minSqm-__0-100000_______search-filter-top-marketplace
-
-Seller (private/agency) is part of the filter string, unlike Yad2. Map search: /for-sale/ישראל?bbox=...
+Madlan (madlan.co.il) URL builder utilities (packaged).
 """
 
 import json
@@ -23,7 +18,9 @@ MADLAN_FOR_SALE = "/for-sale"
 
 def load_madlan_config(json_path: Optional[Path] = None) -> Dict[str, Any]:
     """Load assets/madlan_config.json (location slugs, condition/seller mappings)."""
-    path = json_path or Path(__file__).resolve().parent / "assets" / "madlan_config.json"
+    # assets live at project root
+    root = Path(__file__).resolve().parents[1]
+    path = json_path or root / "assets" / "madlan_config.json"
     if not path.exists():
         raise FileNotFoundError(f"Madlan config not found: {path}")
     with path.open("r", encoding="utf-8") as f:
@@ -165,7 +162,7 @@ def build_madlan_url_from_preferences(
     )
     condition_map = config.get("property_condition_values") or {}
     cond_raw = property_condition or uf.get("property_condition")
-    if isinstance(cond_raw, list):
+    if isinstance(cond_raw, List):
         cond_list = [condition_map.get(str(c), str(c)) for c in cond_raw]
     else:
         cond_list = ["toRenovated", "preserved"]
@@ -217,3 +214,5 @@ def build_madlan_url_from_preferences(
         min_sqm=int(min_sqm or uf.get("min_square_meters") or uf.get("minSquareMeterBuild") or 90),
         page=page,
     )
+
+

@@ -37,7 +37,7 @@ from yad2_pipeline import (
     _is_broker_card,
     load_filter_preferences,
 )
-from listing_extract_common import (
+from web_agent.listing_extract_common import (
     parse_float,
     parse_int,
     extract_ssr_hydrated_context,
@@ -51,7 +51,7 @@ from listing_extract_common import (
     map_schema_boolean_to_amenities,
     build_technical_profile_en,
 )
-from madlan_url_builder import build_madlan_url_from_preferences, load_madlan_config
+from web_agent.madlan_url_builder import build_madlan_url_from_preferences, load_madlan_config
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -938,7 +938,7 @@ def main() -> None:
     locations_list: Optional[List[str]] = None
     if args.locations:
         try:
-            from unified_locations import resolve_locations_to_madlan
+            from web_agent.unified_locations import resolve_locations_to_madlan
             locations_list, export_slug = resolve_locations_to_madlan(args.locations, caller="Madlan")
             if locations_list:
                 prefs["locations"] = locations_list

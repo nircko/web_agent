@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore", category=RequestsDependencyWarning)
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from listing_extract_common import parse_float, parse_int
+from web_agent.listing_extract_common import parse_float, parse_int
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from playwright.sync_api import sync_playwright, Page, Browser
@@ -38,7 +38,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-from yad2_url_builder import (
+from web_agent.yad2_url_builder import (
     load_mappings,
     build_yad2_url_from_json,
     group_areas_and_cities_by_district,
@@ -1867,7 +1867,7 @@ def main() -> None:
     export_slug: Optional[str] = None
     if args.locations and args.locations.strip():
         try:
-            from unified_locations import resolve_locations_to_yad2
+            from web_agent.unified_locations import resolve_locations_to_yad2
             areas_override, cities_override, export_slug = resolve_locations_to_yad2(
                 args.locations.strip(), caller="Yad2"
             )

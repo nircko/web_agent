@@ -1,8 +1,8 @@
 """
-Unified English location names for Yad2 and Madlan.
+Unified English location names for Yad2 and Madlan (packaged).
 
-Resolves input like "Haifa" or "Haifa, Rehovot" to platform-specific values using
-assets/unified_location_names.json. Supports aliases (e.g. Hebrew or "Haifa Area").
+This version lives under the `web_agent` package so we resolve assets relative
+to the project root (one level above this file).
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_PATH = Path(__file__).resolve().parent / "assets" / "unified_location_names.json"
-_YAD2_AREA_IDS_PATH = Path(__file__).resolve().parent / "assets" / "yad2_area_IDs.json"
+_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_PATH = _ROOT / "assets" / "unified_location_names.json"
+_YAD2_AREA_IDS_PATH = _ROOT / "assets" / "yad2_area_IDs.json"
 _CACHE: Optional[Dict[str, Any]] = None
 _YAD2_AREA_CACHE: Optional[Dict[str, str]] = None
 
@@ -227,3 +228,4 @@ def resolve_locations_to_madlan(
 
     export_slug = "_".join(slugs) if slugs else "listings"
     return madlan_list, export_slug
+

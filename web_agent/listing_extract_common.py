@@ -85,10 +85,12 @@ SSR_DATE_KEYS_PUBLICATION = (
     "releaseDate", "release_date", "datePublished", "date_published", "publishedAt", "published_at",
     "createdAt", "created_at", "creationDate", "creation_date", "publishDate", "publish_date",
     "postedAt", "posted_at", "listDate", "list_date", "adDate", "ad_date", "uploadDate", "upload_date",
+    "date", "listingDate", "listing_date", "adCreatedDate", "firstPublished", "published", "posted",
 )
+# Madlan uses "lastUpdated" in source HTML; try it first
 SSR_DATE_KEYS_LAST_UPDATE = (
-    "lastUpdate", "last_update", "dateModified", "date_modified", "updatedAt", "updated_at",
-    "modifiedAt", "modified_at", "lastUpdated", "last_updated", "updateDate", "update_date",
+    "lastUpdated", "last_updated", "lastUpdate", "last_update", "dateModified", "date_modified",
+    "updatedAt", "updated_at", "modifiedAt", "modified_at", "updateDate", "update_date",
 )
 # Keys for phone in SSR/JSON (camelCase, snake_case, site-specific)
 SSR_PHONE_KEYS = (
@@ -258,14 +260,98 @@ def extract_ssr_dates_and_phone(html: str, soup: Optional[BeautifulSoup] = None)
             if phone_val is not None:
                 result["phone_from_source"] = _extract_phone_from_value(phone_val)
 
-    # Fallback: regex in HTML for "releaseDate":"..." or "telephone":"..."
+    # Fallback: regex in HTML for "releaseDate":"...", timestamps, or telephone
     if result["publication_date_raw"] is None:
         for key in SSR_DATE_KEYS_PUBLICATION:
+            # Quoted string (ISO or date)
+            m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*["\']([^"\']+)["\']', html)
+            if m:
+                raw = m.group(1).strip()
+                if re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", raw) or re.search(r"\d{1,2}[-/.]\d{1,2}[-/.]\d{4}", raw):
+                    result["publication_date_raw"] = raw
+                    result["publication_date_iso"] = _normalize_date_to_iso(raw)
+                    break
+            # Unquoted value (ISO string or numeric timestamp)
             m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*["\']?([^"\'}}\s,]+)["\']?', html)
             if m:
-                result["publication_date_raw"] = m.group(1).strip()
-                result["publication_date_iso"] = _normalize_date_to_iso(result["publication_date_raw"])
-                break
+                raw = m.group(1).strip()
+                if re.match(r"^\d+$", raw) or re.search(r"\d{4}-\d{2}-\d{2}", raw) or re.search(r"\d{1,2}[./]\d{1,2}[./]\d{4}", raw):
+                    result["publication_date_raw"] = raw
+                    result["publication_date_iso"] = _normalize_date_to_iso(int(raw)) if raw.isdigit() else _normalize_date_to_iso(raw)
+                    break
+        # Numeric timestamp (ms or s) after any publication key
+        if result["publication_date_raw"] is None:
+            for key in SSR_DATE_KEYS_PUBLICATION:
+                m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*(\d{{10,15}})', html)
+                if m:
+                    result["publication_date_raw"] = m.group(1)
+                    result["publication_date_iso"] = _normalize_date_to_iso(int(m.group(1)))
+                    break
+
+    # Fallback: regex in HTML for last update (lastUpdate, updatedAt, dateModified, etc.) — e.g. Madlan in script source
+    if result["last_update_raw"] is None:
+        for key in SSR_DATE_KEYS_LAST_UPDATE:
+            m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*["\']([^"\']+)["\']', html)
+            if m:
+                raw = m.group(1).strip()
+                if re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", raw) or re.search(r"\d{1,2}[-/.]\d{1,2}[-/.]\d{4}", raw):
+                    result["last_update_raw"] = raw
+                    result["last_update_iso"] = _normalize_date_to_iso(raw)
+                    break
+        if result["last_update_raw"] is None:
+            for key in SSR_DATE_KEYS_LAST_UPDATE:
+                m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*["\']?([^"\'}}\s,]+)["\']?', html)
+                if m:
+                    raw = m.group(1).strip()
+                    if re.match(r"^\d+$", raw) or re.search(r"\d{4}-\d{2}-\d{2}", raw) or re.search(r"\d{1,2}[./]\d{1,2}[./]\d{4}", raw):
+                        result["last_update_raw"] = raw
+                        result["last_update_iso"] = _normalize_date_to_iso(int(raw)) if raw.isdigit() else _normalize_date_to_iso(raw)
+                        break
+        if result["last_update_raw"] is None:
+            for key in SSR_DATE_KEYS_LAST_UPDATE:
+                m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*(\d{{10,15}})', html)
+                if m:
+                    result["last_update_raw"] = m.group(1)
+                    result["last_update_iso"] = _normalize_date_to_iso(int(m.group(1)))
+                    break
+
+    # Fallback: visible text (e.g. Madlan "תאריך פרסום" / "פורסם ב" / "עודכן ב")
+    if soup is not None:
+        text = soup.get_text(" ", strip=True)
+
+        def _parse_date_after_label(prefix: str, max_chars: int = 100) -> Optional[str]:
+            idx = text.find(prefix)
+            if idx < 0:
+                return None
+            after = text[idx : idx + max_chars]
+            dm = re.search(r"(\d{1,2})[./](\d{1,2})[./](\d{4})", after)
+            if dm:
+                return f"{dm.group(3)}-{dm.group(2).zfill(2)}-{dm.group(1).zfill(2)}"
+            iso = re.search(r"(\d{4})-(\d{2})-(\d{2})", after)
+            if iso:
+                return f"{iso.group(1)}-{iso.group(2)}-{iso.group(3)}"
+            return None
+
+        if result["publication_date_raw"] is None:
+            for label in ("תאריך פרסום", "פורסם ב", "פורסם", "תאריך"):
+                iso_val = _parse_date_after_label(label)
+                if iso_val:
+                    result["publication_date_raw"] = iso_val
+                    result["publication_date_iso"] = iso_val
+                    break
+            if result["publication_date_raw"] is None:
+                # Fallback: "עודכן ב" (updated on) as publication if nothing else found
+                iso_val = _parse_date_after_label("עודכן ב") or _parse_date_after_label("תאריך עדכון")
+                if iso_val:
+                    result["publication_date_raw"] = iso_val
+                    result["publication_date_iso"] = iso_val
+
+        if result["last_update_raw"] is None:
+            iso_val = _parse_date_after_label("עודכן ב") or _parse_date_after_label("תאריך עדכון")
+            if iso_val:
+                result["last_update_raw"] = iso_val
+                result["last_update_iso"] = iso_val
+
     if result["phone_from_source"] is None:
         for key in SSR_PHONE_KEYS:
             m = re.search(rf'["\']?{re.escape(key)}["\']?\s*:\s*["\']([^"\']+)["\']', html)
@@ -525,3 +611,5 @@ def build_technical_profile_en(
     lines.append("Amenities: %s" % (", ".join(on) or "—"))
     lines.append("Investment: transit=[%s], nuisances=[%s]" % (transit_tags or "—", nuisance_tags or "—"))
     return " | ".join(lines)
+
+

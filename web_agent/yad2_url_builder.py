@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+"""
+Yad2 URL builder utilities (packaged).
+
+Moved into web_agent so root stays clean.
+"""
+
 import json
 import logging
 from pathlib import Path
@@ -5,7 +13,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
-
 
 JsonMapping = Mapping[str, Any]
 StrOrInt = Union[str, int]
@@ -257,4 +264,5 @@ def build_yad2_url_from_json(
                 query[k] = v
 
     return f"{base}{path}?{urlencode(query)}"
+
 
