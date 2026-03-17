@@ -14,13 +14,13 @@ echo  configure Playwright and .env.
 echo ============================================
 echo.
 
-powershell -ExecutionPolicy Bypass -File ".\scripts\setup_yad2_scraper_windows.ps1"
+powershell -ExecutionPolicy Bypass -File ".\setup\setup_yad2_scraper_windows.ps1"
 
 echo.
 echo ============================================
 echo  Setup finished. If you saw no errors above,
 echo  you can now run:
-echo    scripts\run_yad2_windows.bat
+echo    cli_tools\run_yad2_windows.bat
 echo ============================================
 echo.
 pause
