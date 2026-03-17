@@ -9,12 +9,12 @@ cd /d "%~dp0\.."
 echo ============================================
 echo  Running Yad2 scraper (Windows)...
 echo  Make sure you ran:
-echo    scripts\setup_yad2_scraper_windows.bat
+echo    setup\setup_yad2_scraper_windows.bat
 echo  at least once on this machine.
 echo ============================================
 echo.
 
-powershell -ExecutionPolicy Bypass -File ".\scripts\run_yad2_windows.ps1"
+powershell -ExecutionPolicy Bypass -File ".\cli_tools\run_yad2_windows.ps1"
 
 echo.
 echo ============================================

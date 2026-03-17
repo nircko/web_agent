@@ -8,7 +8,7 @@ This project implements:
 
 ---
 
-### 0. Quick start for non‑technical users
+### 0. Quick start
 
 You only need three basic steps the first time:
 
@@ -95,12 +95,12 @@ They will:
 
 **Windows:**
 
-1. In File Explorer, open the `scripts\` folder inside `web_agent`.
+1. In File Explorer, open the `setup\` folder inside `web_agent`.
 2. Double‑click `setup_yad2_scraper_windows.bat`  
    **or** open PowerShell in the project root (`web_agent`) and run:
 
    ```powershell
-   .\scripts\setup_yad2_scraper_windows.bat
+   .\setup\setup_yad2_scraper_windows.bat
    ```
 
 **macOS / Linux:**
@@ -109,13 +109,13 @@ They will:
 2. Make the script executable once:
 
    ```bash
-   chmod +x cli_tools/setup_yad2_scraper_macos.sh
+   chmod +x setup/setup_yad2_scraper_macos.sh
    ```
 
 3. Run:
 
    ```bash
-   ./cli_tools/setup_yad2_scraper_macos.sh
+   ./setup/setup_yad2_scraper_macos.sh
    ```
 
 These scripts are **idempotent** – you can re-run them if something goes wrong.

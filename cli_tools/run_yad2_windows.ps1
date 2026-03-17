@@ -12,7 +12,7 @@ Write-Host "=== Yad2 Scraper Runner (Windows) ===" -ForegroundColor Cyan
 $venvPython = ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     Write-Host "Virtual environment not found at $venvPython." -ForegroundColor Red
-    Write-Host "Please run setup_yad2_scraper_windows.bat first, then re-run this script." -ForegroundColor Yellow
+    Write-Host "Please run setup\setup_yad2_scraper_windows.bat first, then re-run this script." -ForegroundColor Yellow
     exit 1
 }
 
